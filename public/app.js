@@ -58,6 +58,7 @@ let resetEmail = "";
 let pendingProfileEmail = "";
 let localStream;
 let remoteStream;
+let activeObjectUrls = [];
 
 const rtcConfig = {
   iceServers: [
@@ -212,6 +213,9 @@ function resetPeer(note = "Disconnected") {
   pendingSignals = [];
   pendingIceCandidates = [];
   incomingFiles.clear();
+  for (const url of activeObjectUrls) URL.revokeObjectURL(url);
+  activeObjectUrls = [];
+  if (messages) messages.innerHTML = "";
   setComposerReady(false);
   peerView.classList.add("hidden");
   emptyState.classList.remove("hidden");
@@ -464,7 +468,9 @@ function receiveData(data) {
       const file = incomingFiles.get(packet.id);
       if (!file) return;
       const blob = new Blob(file.chunks, { type: file.meta.type });
-      addFileMessage({ name: file.meta.name, type: file.meta.type }, URL.createObjectURL(blob));
+      const url = URL.createObjectURL(blob);
+      activeObjectUrls.push(url);
+      addFileMessage({ name: file.meta.name, type: file.meta.type }, url);
       incomingFiles.delete(packet.id);
     }
     return;
@@ -494,7 +500,9 @@ async function sendFile(file) {
   }
 
   sendData(JSON.stringify({ kind: "file-end", id }));
-  addFileMessage(file, URL.createObjectURL(file), true);
+  const url = URL.createObjectURL(file);
+  activeObjectUrls.push(url);
+  addFileMessage(file, url, true);
 }
 
 function escapeHtml(text) {
