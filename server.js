@@ -17,11 +17,12 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
 const PUBLIC_DIR = path.join(__dirname, "public");
 const SESSION_COOKIE = "p2p_session";
-const SESSION_TTL_MS = 15 * 60 * 1000;
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_MAX = 10;
 const MAGIC_LINK_TTL_MS = 10 * 60 * 1000;
 const MAX_ONLINE_USERS = Number(process.env.MAX_ONLINE_USERS || 250);
+const ADMIN_SECRET = process.env.ADMIN_SECRET || "";
 
 const online = new Map();
 const pendingRequests = new Map();
@@ -674,6 +675,49 @@ async function handleApi(req, res, url) {
           status: live ? live.status : "offline"
         }
       });
+    }
+
+    // ── Admin API ────────────────────────────────────────────
+    if (url.pathname.startsWith("/api/admin/")) {
+      const secret = req.headers["x-admin-secret"] || "";
+      if (!ADMIN_SECRET || secret !== ADMIN_SECRET) return sendError(res, 401, "Unauthorized.");
+
+      if (req.method === "GET" && url.pathname === "/api/admin/users") {
+        const users = await pool.query("SELECT id, username, email, email_verified, created_at FROM users ORDER BY created_at DESC");
+        return sendJson(res, 200, { users: users.rows });
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/admin/users") {
+        const body = await readBody(req);
+        if (!requireFields(["email", "username"], body)) return sendError(res, 400, "Email and username are required.");
+        const email = normalizeEmail(body.email);
+        const username = normalizeUsername(body.username);
+        const password = String(body.password || "0000000000");
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return sendError(res, 400, "Invalid email.");
+        if (!/^[a-z0-9_]{3,24}$/.test(username)) return sendError(res, 400, "Username must be 3-24 letters, numbers, or underscores.");
+        if (password.length < 10) return sendError(res, 400, "Password must be at least 10 characters.");
+        if (await findUserByEmail(email)) return sendError(res, 409, "Email already registered.");
+        if (await findUserByUsername(username)) return sendError(res, 409, "Username already taken.");
+        await run(
+          "INSERT INTO users (id, email, username, password_hash, email_verified, created_at) VALUES ($1, $2, $3, $4, 1, $5)",
+          [crypto.randomUUID(), email, username, hashPassword(password), new Date().toISOString()]
+        );
+        return sendJson(res, 200, { ok: true, message: `User @${username} created with password: ${password}` });
+      }
+
+      if (req.method === "DELETE" && url.pathname.startsWith("/api/admin/users/")) {
+        const identifier = decodeURIComponent(url.pathname.replace("/api/admin/users/", ""));
+        const user = await one("SELECT id, username FROM users WHERE email = $1 OR username = $1", [identifier.toLowerCase()]);
+        if (!user) return sendError(res, 404, "User not found.");
+        await run("DELETE FROM sessions WHERE user_id = $1", [user.id]);
+        await run("DELETE FROM users WHERE id = $1", [user.id]);
+        // kick them offline if connected
+        const entry = online.get(user.id);
+        if (entry) { endPair(user.id); entry.ws.end(); online.delete(user.id); broadcastPresence(); }
+        return sendJson(res, 200, { ok: true, message: `User @${user.username} deleted.` });
+      }
+
+      return sendError(res, 404, "Admin route not found.");
     }
 
     sendError(res, 404, "Not found.");
