@@ -40,6 +40,7 @@ const sendBtn = document.querySelector("#sendBtn");
 const peerStatus = document.querySelector("#peerStatus");
 const passwordToggles = document.querySelectorAll("[data-toggle-password]");
 const startCallBtn = document.querySelector("#startCallBtn");
+const startAudioBtn = document.querySelector("#startAudioBtn");
 const endCallBtn = document.querySelector("#endCallBtn");
 const videoCall = document.querySelector("#videoCall");
 const localVideo = document.querySelector("#localVideo");
@@ -55,6 +56,7 @@ const localVideoFull = document.querySelector("#localVideoFull");
 const pipCloseBtn = document.querySelector("#pipCloseBtn");
 const exitFullscreenBtn = document.querySelector("#exitFullscreenBtn");
 const endCallFsBtn = document.querySelector("#endCallFsBtn");
+const mobileRequestBanner = document.querySelector("#mobileRequestBanner");
 
 let me = null;
 let socket;
@@ -202,6 +204,7 @@ function renderRequest(from) {
   reject.addEventListener("click", () => {
     sendSocket("respond-request", { accept: false });
     requests.innerHTML = "";
+    mobileRequestBanner.classList.add("hidden");
   });
 
   const accept = document.createElement("button");
@@ -210,11 +213,19 @@ function renderRequest(from) {
   accept.addEventListener("click", () => {
     sendSocket("respond-request", { accept: true });
     requests.innerHTML = "";
+    mobileRequestBanner.classList.add("hidden");
   });
 
   actions.append(reject, accept);
   row.appendChild(actions);
   requests.appendChild(row);
+
+  // On mobile: show a banner in the sidebar so user knows a request came
+  if (window.innerWidth <= 768) {
+    mobileRequestBanner.textContent = `📲 @${escapeHtml(from.username)} wants to connect!`;
+    mobileRequestBanner.classList.remove("hidden");
+    showWorkspace(); // slide to workspace to accept/reject
+  }
 }
 
 function showPeer(peerUser) {
@@ -247,6 +258,7 @@ function resetPeer(note = "Disconnected") {
   peerView.classList.add("hidden");
   emptyState.classList.remove("hidden");
   addSystemMessage(note);
+  showSidebar(); // on mobile, slide back to user list
 }
 
 function setComposerReady(isReady) {
@@ -254,6 +266,7 @@ function setComposerReady(isReady) {
   fileBtn.disabled = !isReady;
   sendBtn.disabled = !isReady;
   startCallBtn.disabled = !isReady;
+  startAudioBtn.disabled = !isReady;
   messageInput.placeholder = isReady ? "Message" : "Waiting for peer connection";
   peerStatus.textContent = isReady ? "Connected with" : "Connecting";
 }
@@ -302,11 +315,14 @@ async function startPeer(isInitiator) {
       remoteVideo.srcObject = remoteStream;
     }
     remoteStream.addTrack(event.track);
-    videoCall.classList.remove("hidden");
+    // Only show video UI if there is actually a video track
+    const hasVideo = remoteStream.getVideoTracks().length > 0;
+    if (hasVideo) videoCall.classList.remove("hidden");
     event.track.addEventListener("ended", () => {
       if (remoteStream) {
         remoteStream.removeTrack(event.track);
-        if (!remoteStream.getTracks().length && !localStream) videoCall.classList.add("hidden");
+        const stillHasVideo = remoteStream.getVideoTracks().length > 0;
+        if (!stillHasVideo && !localStream) videoCall.classList.add("hidden");
       }
     });
   };
@@ -387,24 +403,33 @@ function setupChannel() {
   };
 }
 
-async function startVideoCall() {
+async function startCall(withVideo = true) {
   if (!peer || !currentPeer || localStream) return;
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    localVideo.srcObject = localStream;
-    remoteVideo.srcObject = remoteStream || null;
-    videoCall.classList.remove("hidden");
-    fullscreenBtn.classList.remove("hidden");
+    localStream = await navigator.mediaDevices.getUserMedia(
+      withVideo ? { video: true, audio: true } : { video: false, audio: true }
+    );
+    if (withVideo) {
+      localVideo.srcObject = localStream;
+      remoteVideo.srcObject = remoteStream || null;
+      videoCall.classList.remove("hidden");
+      fullscreenBtn.classList.remove("hidden");
+      makePipDraggable();
+    }
     startCallBtn.classList.add("hidden");
+    startAudioBtn.classList.add("hidden");
     endCallBtn.classList.remove("hidden");
     for (const track of localStream.getTracks()) peer.addTrack(track, localStream);
-    if (channel?.readyState === "open") sendData(JSON.stringify({ kind: "video-start" }));
-    makePipDraggable();
+    const kind = withVideo ? "video-start" : "audio-start";
+    if (channel?.readyState === "open") sendData(JSON.stringify({ kind }));
     await renegotiatePeer();
   } catch (error) {
-    addSystemMessage("Camera or microphone permission was denied");
+    addSystemMessage("Permission denied: " + error.message);
   }
 }
+
+function startVideoCall() { return startCall(true); }
+function startAudioCall() { return startCall(false); }
 
 async function stopVideoCall(renegotiate = true) {
   if (!localStream && !remoteStream) return;
@@ -429,11 +454,12 @@ async function stopVideoCall(renegotiate = true) {
     remoteVideoFull.srcObject = null;
   }
   startCallBtn.classList.remove("hidden");
+  startAudioBtn.classList.remove("hidden");
   endCallBtn.classList.add("hidden");
   fullscreenBtn.classList.add("hidden");
 
-  if (!remoteStream?.getTracks().length) videoCall.classList.add("hidden");
-  if (channel?.readyState === "open") sendData(JSON.stringify({ kind: "video-ended" }));
+  if (!remoteStream?.getVideoTracks().length) videoCall.classList.add("hidden");
+  if (channel?.readyState === "open") sendData(JSON.stringify({ kind: "call-ended" }));
   if (renegotiate) await renegotiatePeer();
 }
 
@@ -544,8 +570,9 @@ function receiveData(data) {
   if (typeof data === "string") {
     const packet = JSON.parse(data);
     if (packet.kind === "message") addMessage(packet.text);
-    if (packet.kind === "video-start") addSystemMessage("Video call started");
-    if (packet.kind === "video-ended") addSystemMessage("Video call ended");
+    if (packet.kind === "video-start") addSystemMessage("📹 Video call started");
+    if (packet.kind === "audio-start") addSystemMessage("🎙️ Voice call started");
+    if (packet.kind === "call-ended" || packet.kind === "video-ended") addSystemMessage("Call ended");
     if (packet.kind === "file-start") incomingFiles.set(packet.id, { meta: packet, chunks: [] });
     if (packet.kind === "file-end") {
       const file = incomingFiles.get(packet.id);
@@ -848,6 +875,7 @@ disconnectBtn.addEventListener("click", () => {
 });
 
 startCallBtn.addEventListener("click", startVideoCall);
+startAudioBtn.addEventListener("click", startAudioCall);
 endCallBtn.addEventListener("click", () => stopVideoCall(true));
 fullscreenBtn.addEventListener("click", enterFullscreen);
 exitFullscreenBtn.addEventListener("click", exitFullscreen);
@@ -855,12 +883,7 @@ endCallFsBtn.addEventListener("click", () => { exitFullscreen(); stopVideoCall(t
 pipCloseBtn.addEventListener("click", () => stopVideoCall(true));
 
 // Back button: return to sidebar on mobile
-backBtn.addEventListener("click", () => {
-  showSidebar();
-});
-
-// Also slide back when peer disconnects
-const _origResetPeer = resetPeer;
+backBtn.addEventListener("click", showSidebar);
 
 const params = new URLSearchParams(location.search);
 

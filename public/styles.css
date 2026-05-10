@@ -159,6 +159,18 @@ input:focus { border-color: var(--accent); outline: 3px solid rgba(15,124,134,.1
 
 .user-list { display: grid; gap: 6px; overflow-y: auto; padding-right: 2px; flex: 1; }
 
+.mobile-request-banner {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  font-size: .9rem;
+  font-weight: 600;
+  color: #92400e;
+  text-align: center;
+}
+
 .user-row, .request-row {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -166,11 +178,12 @@ input:focus { border-color: var(--accent); outline: 3px solid rgba(15,124,134,.1
 }
 
 .user-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  padding: 12px;
+  gap: 10px;
+  padding: 8px 12px;
+  min-height: 0;
 }
 
 .status { color: var(--muted); font-size: .78rem; font-weight: 600; }
