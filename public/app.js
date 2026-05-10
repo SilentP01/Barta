@@ -56,6 +56,8 @@ const localVideoFull = document.querySelector("#localVideoFull");
 const pipCloseBtn = document.querySelector("#pipCloseBtn");
 const exitFullscreenBtn = document.querySelector("#exitFullscreenBtn");
 const endCallFsBtn = document.querySelector("#endCallFsBtn");
+const muteFsBtn = document.querySelector("#muteFsBtn");
+const pauseFsBtn = document.querySelector("#pauseFsBtn");
 const mobileRequestBanner = document.querySelector("#mobileRequestBanner");
 const themeToggle = document.querySelector("#themeToggle");
 const themeIcon = document.querySelector("#themeIcon");
@@ -275,8 +277,6 @@ function setComposerReady(isReady) {
   sendBtn.disabled = !isReady;
   startCallBtn.disabled = !isReady;
   startAudioBtn.disabled = !isReady;
-  muteBtn.disabled = !isReady;
-  pauseBtn.disabled = !isReady;
   messageInput.placeholder = isReady ? "Message" : "Waiting for peer connection";
   peerStatus.textContent = isReady ? "CONNECTED WITH" : "CONNECTING";
 }
@@ -930,8 +930,6 @@ disconnectBtn.addEventListener("click", () => {
 
 startCallBtn.addEventListener("click", startVideoCall);
 startAudioBtn.addEventListener("click", startAudioCall);
-muteBtn.addEventListener("click", toggleAudio);
-pauseBtn.addEventListener("click", toggleVideo);
 muteFsBtn.addEventListener("click", toggleAudio);
 pauseFsBtn.addEventListener("click", toggleVideo);
 endCallBtn.addEventListener("click", () => stopVideoCall(true));
