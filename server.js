@@ -4,6 +4,15 @@ const http = require("http");
 const path = require("path");
 const { Pool } = require("pg");
 
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled Rejection:", err);
+});
+
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -17,12 +26,18 @@ const MAX_ONLINE_USERS = Number(process.env.MAX_ONLINE_USERS || 250);
 const online = new Map();
 const pendingRequests = new Map();
 const rateLimits = new Map();
+
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.PGSSL === "true" ? { rejectUnauthorized: false } : undefined,
+  ssl: { rejectUnauthorized: false },
   max: Number(process.env.PG_POOL_MAX || 12),
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000
+});
+
+pool.on("error", (err) => {
+  console.error("🔥 Unexpected PG error:", err);
 });
 
 const mimeTypes = {
@@ -37,7 +52,7 @@ const mimeTypes = {
 };
 
 async function initDatabase() {
-  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required.");
+  
   await pool.query(`
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -228,7 +243,9 @@ async function createSession(user) {
 async function getSessionUser(req) {
   const token = parseCookies(req)[SESSION_COOKIE];
   if (!token) return null;
-  await run("DELETE FROM sessions WHERE expires_at <= $1", [Date.now()]);
+  setInterval(async () => {
+    await run("DELETE FROM sessions WHERE expires_at <= $1", [Date.now()]);
+  }, 5 * 60 * 1000);
   return one(
     `
       SELECT users.id, users.username
@@ -243,7 +260,7 @@ async function getSessionUser(req) {
 async function clearSession(req, res) {
   const token = parseCookies(req)[SESSION_COOKIE];
   if (token) await run("DELETE FROM sessions WHERE token_hash = $1", [hashToken(token)]);
-  return sendJsonWithHeaders(res, 200, { ok: true }, { "Set-Cookie": `${SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0` });
+  return sendJsonWithHeaders(res, 200, { ok: true }, { "Set-Cookie": `${SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0; Secure` });
 }
 
 function getClientIp(req) {
@@ -372,8 +389,8 @@ function readBody(req) {
     req.on("data", (chunk) => {
       body += chunk.toString("utf8");
       if (body.length > 16384) {
-        reject(new Error("Request is too large."));
         req.destroy();
+        return reject(new Error("Request is too large."));
       }
     });
 
@@ -918,17 +935,32 @@ server.on("upgrade", (req, socket) => {
   });
 });
 
-initDatabase()
-  .then(() => {
+if (!process.env.DATABASE_URL || process.env.DATABASE_URL.trim() === "") {
+  throw new Error("DATABASE_URL is missing or empty");
+}
+
+
+async function startApplication() {
+  try {
+    console.log("🚀 Booting app...");
+
     if (!process.env.DATABASE_URL) {
-      throw new Error("DATABASE_URL missing");
+      throw new Error("DATABASE_URL is missing in environment variables");
     }
 
-    server.listen(process.env.PORT, "0.0.0.0", () => {
-      console.log("Server started");
+    await initDatabase();
+    console.log("✅ Database connected successfully");
+
+    const port = process.env.PORT || 3000;
+
+    server.listen(port, "0.0.0.0", () => {
+      console.log(`🚀 Server running at http://0.0.0.0:${port}`);
     });
-  })
-  .catch((err) => {
-    console.error("BOOT ERROR:", err);
+
+  } catch (err) {
+    console.error("❌ Startup failed:", err);
     process.exit(1);
-  });
+  }
+}
+
+startApplication();
