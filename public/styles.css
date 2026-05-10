@@ -188,15 +188,20 @@ input:focus { border-color: var(--accent); outline: 3px solid rgba(15,124,134,.1
 .refresh-btn {
   background: none;
   color: var(--accent);
-  font-size: 1.1rem;
   padding: 4px;
   border-radius: 4px;
-  line-height: 1;
-  transition: transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
 }
 
 .refresh-btn:hover {
-  transform: rotate(45deg);
+  opacity: 0.7;
+}
+
+.refresh-btn.syncing svg {
+  animation: spin 0.8s linear infinite;
 }
 
 .theme-toggle {

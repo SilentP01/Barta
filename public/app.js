@@ -279,6 +279,10 @@ function connectSocket() {
 
   socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`);
 
+  socket.addEventListener("open", () => {
+    sendSocket("refresh-presence");
+  });
+
   socket.addEventListener("message", async (event) => {
     const message = JSON.parse(event.data);
 
@@ -922,10 +926,27 @@ themeIcon.textContent = savedTheme === "dark" ? "☀️" : "🌙";
 
 // Refresh Users
 refreshBtn.addEventListener("click", () => {
+  // Visual feedback: Spin the button
+  refreshBtn.classList.add("syncing");
+  setTimeout(() => refreshBtn.classList.remove("syncing"), 1000);
+
+  // Simulation: clear list and show loading for a second
+  const oldContent = userList.innerHTML;
+  userList.innerHTML = '<p class="muted">Syncing users...</p>';
+
   if (socket?.readyState === WebSocket.OPEN) {
     sendSocket("refresh-presence");
-    refreshBtn.style.animation = "spin 1s linear infinite";
-    setTimeout(() => refreshBtn.style.animation = "", 1000);
+  } else {
+    // If socket is dead, try to fully reconnect
+    console.log("Socket closed, attempting reconnection...");
+    connectSocket();
+    
+    // If still not open after a bit, restore or show error
+    setTimeout(() => {
+      if (socket?.readyState !== WebSocket.OPEN) {
+        userList.innerHTML = '<p class="notice">Connection failed. Please check your internet.</p>';
+      }
+    }, 2000);
   }
 });
 
