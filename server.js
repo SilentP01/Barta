@@ -202,8 +202,15 @@ function hashToken(token) {
 }
 
 function getBaseUrl(req) {
-  const proto = req.headers["x-forwarded-proto"] || (req.socket.encrypted ? "https" : "http");
-  const host = req.headers["x-forwarded-host"] || req.headers.host || `127.0.0.1:${PORT}`;
+  const proto =
+    req.headers["x-forwarded-proto"] ||
+    (req.socket.encrypted ? "https" : "http");
+
+  const host =
+    req.headers["x-forwarded-host"] ||
+    req.headers.host ||
+    process.env.RAILWAY_PUBLIC_DOMAIN;
+
   return `${proto}://${host}`;
 }
 
@@ -913,16 +920,15 @@ server.on("upgrade", (req, socket) => {
 
 initDatabase()
   .then(() => {
-    const PORT = process.env.PORT || 3000;
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL missing");
+    }
 
-    server.listen(PORT, "0.0.0.0", () => {
-      console.log(`Barta running at http://0.0.0.0:${PORT}`);
-      console.log(
-        `Email magic links: ${emailServiceReady() ? "configured" : "not configured"}`
-      );
+    server.listen(process.env.PORT, "0.0.0.0", () => {
+      console.log("Server started");
     });
   })
-  .catch((error) => {
-    console.error(error);
+  .catch((err) => {
+    console.error("BOOT ERROR:", err);
     process.exit(1);
   });
