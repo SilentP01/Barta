@@ -60,6 +60,10 @@ const mobileRequestBanner = document.querySelector("#mobileRequestBanner");
 const themeToggle = document.querySelector("#themeToggle");
 const themeIcon = document.querySelector("#themeIcon");
 const refreshBtn = document.querySelector("#refreshBtn");
+const muteBtn = document.querySelector("#muteBtn");
+const pauseBtn = document.querySelector("#pauseBtn");
+const muteFsBtn = document.querySelector("#muteFsBtn");
+const pauseFsBtn = document.querySelector("#pauseFsBtn");
 
 let me = null;
 let socket;
@@ -270,6 +274,8 @@ function setComposerReady(isReady) {
   sendBtn.disabled = !isReady;
   startCallBtn.disabled = !isReady;
   startAudioBtn.disabled = !isReady;
+  muteBtn.disabled = !isReady;
+  pauseBtn.disabled = !isReady;
   messageInput.placeholder = isReady ? "Message" : "Waiting for peer connection";
   peerStatus.textContent = isReady ? "Connected with" : "Connecting";
 }
@@ -451,6 +457,28 @@ async function startCall(withVideo = true) {
   } catch (error) {
     addSystemMessage("Permission denied: " + error.message);
   }
+}
+
+function toggleAudio() {
+  if (!localStream) return;
+  const audioTrack = localStream.getAudioTracks()[0];
+  if (!audioTrack) return;
+  audioTrack.enabled = !audioTrack.enabled;
+  const isMuted = !audioTrack.enabled;
+  muteBtn.classList.toggle("active-opt", isMuted);
+  muteFsBtn.classList.toggle("active-opt", isMuted);
+  muteFsBtn.textContent = isMuted ? "Unmute" : "Mute";
+}
+
+function toggleVideo() {
+  if (!localStream) return;
+  const videoTrack = localStream.getVideoTracks()[0];
+  if (!videoTrack) return;
+  videoTrack.enabled = !videoTrack.enabled;
+  const isPaused = !videoTrack.enabled;
+  pauseBtn.classList.toggle("active-opt", isPaused);
+  pauseFsBtn.classList.toggle("active-opt", isPaused);
+  pauseFsBtn.textContent = isPaused ? "Start Video" : "Stop Video";
 }
 
 function startVideoCall() { return startCall(true); }
@@ -901,6 +929,10 @@ disconnectBtn.addEventListener("click", () => {
 
 startCallBtn.addEventListener("click", startVideoCall);
 startAudioBtn.addEventListener("click", startAudioCall);
+muteBtn.addEventListener("click", toggleAudio);
+pauseBtn.addEventListener("click", toggleVideo);
+muteFsBtn.addEventListener("click", toggleAudio);
+pauseFsBtn.addEventListener("click", toggleVideo);
 endCallBtn.addEventListener("click", () => stopVideoCall(true));
 fullscreenBtn.addEventListener("click", enterFullscreen);
 exitFullscreenBtn.addEventListener("click", exitFullscreen);
@@ -926,27 +958,14 @@ themeIcon.textContent = savedTheme === "dark" ? "☀️" : "🌙";
 
 // Refresh Users
 refreshBtn.addEventListener("click", () => {
-  // Visual feedback: Spin the button
   refreshBtn.classList.add("syncing");
-  setTimeout(() => refreshBtn.classList.remove("syncing"), 1000);
-
-  // Simulation: clear list and show loading for a second
-  const oldContent = userList.innerHTML;
-  userList.innerHTML = '<p class="muted">Syncing users...</p>';
+  setTimeout(() => refreshBtn.classList.remove("syncing"), 600);
 
   if (socket?.readyState === WebSocket.OPEN) {
     sendSocket("refresh-presence");
   } else {
-    // If socket is dead, try to fully reconnect
-    console.log("Socket closed, attempting reconnection...");
+    userList.innerHTML = '<p class="muted">Reconnecting...</p>';
     connectSocket();
-    
-    // If still not open after a bit, restore or show error
-    setTimeout(() => {
-      if (socket?.readyState !== WebSocket.OPEN) {
-        userList.innerHTML = '<p class="notice">Connection failed. Please check your internet.</p>';
-      }
-    }, 2000);
   }
 });
 

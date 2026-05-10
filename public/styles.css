@@ -36,6 +36,9 @@
 [data-theme="dark"] .auth-panel { background: #1a1d27; }
 [data-theme="dark"] .profile-panel { background: #0f1117; }
 [data-theme="dark"] .user-row, [data-theme="dark"] .request-row { background: #1a1d27; }
+[data-theme="dark"] .call-btn, [data-theme="dark"] .icon-btn { background: #2a2d3a; color: #fff; }
+[data-theme="dark"] .call-btn:hover, [data-theme="dark"] .icon-btn:hover { background: #3f4455; }
+[data-theme="dark"] .peer-header { background: #1a1d27; border-bottom-color: #2a2d3a; }
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -212,7 +215,16 @@ input:focus { border-color: var(--accent); outline: 3px solid rgba(15,124,134,.1
 }
 
 
-.user-list { display: grid; gap: 6px; overflow-y: auto; padding-right: 2px; flex: 1; }
+.user-list { 
+  display: flex; 
+  flex-direction: column;
+  gap: 8px; 
+  overflow-y: auto; 
+  padding-right: 2px; 
+  flex: 1; 
+  align-items: stretch;
+  justify-content: flex-start;
+}
 
 .mobile-request-banner {
   background: #fef3c7;
@@ -309,6 +321,12 @@ input:focus { border-color: var(--accent); outline: 3px solid rgba(15,124,134,.1
 .call-btn.end-call { background: #fee2e2; color: var(--danger); }
 .call-btn.end-call:hover { background: #fecaca; }
 .call-btn:disabled { opacity: .4; }
+
+.call-btn.active-opt {
+  background: var(--accent) !important;
+  color: #fff !important;
+}
+
 
 /* ─── FLOATING PiP VIDEO (default mode) ─────── */
 .video-call {
