@@ -78,7 +78,9 @@ const rtcConfig = {
       username: "openrelayproject",
       credential: "openrelayproject"
     }
-  ]
+  ],
+  bundlePolicy: "max-bundle",
+  rtcpMuxPolicy: "require"
 };
 
 function setNotice(text = "") {

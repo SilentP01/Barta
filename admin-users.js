@@ -15,6 +15,7 @@ function usage() {
   console.log(`
 Usage:
   node admin-users.js list
+  node admin-users.js add <email> <username> [password]
   node admin-users.js get <email-or-username>
   node admin-users.js set-email <email-or-username> <new-email>
   node admin-users.js set-username <email-or-username> <new-username>
@@ -70,6 +71,21 @@ async function main() {
     await pool.query("DELETE FROM sessions WHERE user_id = $1", [user.id]);
     await pool.query("DELETE FROM users WHERE id = $1", [user.id]);
     console.log("User deleted.");
+  } else if (command === "add" && identifier && value) {
+    const email = identifier.trim().toLowerCase();
+    const username = value.trim().toLowerCase();
+    const password = process.argv[5] || "0000000000";
+    if (!/^[a-z0-9_]{3,24}$/.test(username)) throw new Error("Username must be 3-24 letters, numbers, or underscores.");
+    if (password.length < 10) throw new Error("Password must be at least 10 characters (default is 0000000000).");
+    const existingEmail = await findUser(email);
+    if (existingEmail) throw new Error("User with that email already exists.");
+    const existingUsername = await findUser(username);
+    if (existingUsername) throw new Error("User with that username already exists.");
+    await pool.query(
+      "INSERT INTO users (id, email, username, password_hash, email_verified, created_at) VALUES ($1, $2, $3, $4, 0, $5)",
+      [crypto.randomUUID(), email, username, hashPassword(password), Date.now()]
+    );
+    console.log(`User created! Email: ${email}, Username: ${username}, Password: ${password}`);
   } else {
     usage();
   }
