@@ -44,6 +44,17 @@ const endCallBtn = document.querySelector("#endCallBtn");
 const videoCall = document.querySelector("#videoCall");
 const localVideo = document.querySelector("#localVideo");
 const remoteVideo = document.querySelector("#remoteVideo");
+// New elements
+const sidebar = document.querySelector("#sidebar");
+const workspace = document.querySelector("#workspace");
+const backBtn = document.querySelector("#backBtn");
+const fullscreenBtn = document.querySelector("#fullscreenBtn");
+const videoFullscreen = document.querySelector("#videoFullscreen");
+const remoteVideoFull = document.querySelector("#remoteVideoFull");
+const localVideoFull = document.querySelector("#localVideoFull");
+const pipCloseBtn = document.querySelector("#pipCloseBtn");
+const exitFullscreenBtn = document.querySelector("#exitFullscreenBtn");
+const endCallFsBtn = document.querySelector("#endCallFsBtn");
 
 let me = null;
 let socket;
@@ -117,7 +128,18 @@ function showApp() {
   authView.classList.add("hidden");
   dashboard.classList.remove("hidden");
   currentUser.textContent = `@${me.username}`;
+  showSidebar();
   connectSocket();
+}
+
+function showSidebar() {
+  sidebar.classList.remove("slide-out");
+  workspace.classList.remove("slide-in");
+}
+
+function showWorkspace() {
+  sidebar.classList.add("slide-out");
+  workspace.classList.add("slide-in");
 }
 
 function showAuth() {
@@ -205,6 +227,7 @@ function showPeer(peerUser) {
   peerView.classList.remove("hidden");
   messages.innerHTML = "";
   addSystemMessage("Connecting securely");
+  showWorkspace(); // slide to chat on mobile
 }
 
 function resetPeer(note = "Disconnected") {
@@ -369,11 +392,14 @@ async function startVideoCall() {
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     localVideo.srcObject = localStream;
+    remoteVideo.srcObject = remoteStream || null;
     videoCall.classList.remove("hidden");
+    fullscreenBtn.classList.remove("hidden");
     startCallBtn.classList.add("hidden");
     endCallBtn.classList.remove("hidden");
     for (const track of localStream.getTracks()) peer.addTrack(track, localStream);
     if (channel?.readyState === "open") sendData(JSON.stringify({ kind: "video-start" }));
+    makePipDraggable();
     await renegotiatePeer();
   } catch (error) {
     addSystemMessage("Camera or microphone permission was denied");
@@ -382,6 +408,8 @@ async function startVideoCall() {
 
 async function stopVideoCall(renegotiate = true) {
   if (!localStream && !remoteStream) return;
+
+  exitFullscreen();
 
   if (localStream) {
     for (const track of localStream.getTracks()) {
@@ -393,17 +421,64 @@ async function stopVideoCall(renegotiate = true) {
 
   localStream = null;
   localVideo.srcObject = null;
+  localVideoFull.srcObject = null;
   if (!renegotiate && remoteStream) {
     for (const track of remoteStream.getTracks()) track.stop();
     remoteStream = null;
     remoteVideo.srcObject = null;
+    remoteVideoFull.srcObject = null;
   }
   startCallBtn.classList.remove("hidden");
   endCallBtn.classList.add("hidden");
+  fullscreenBtn.classList.add("hidden");
 
   if (!remoteStream?.getTracks().length) videoCall.classList.add("hidden");
   if (channel?.readyState === "open") sendData(JSON.stringify({ kind: "video-ended" }));
   if (renegotiate) await renegotiatePeer();
+}
+
+function enterFullscreen() {
+  // mirror streams into fullscreen overlay
+  remoteVideoFull.srcObject = remoteStream || null;
+  localVideoFull.srcObject = localStream || null;
+  videoCall.classList.add("hidden");
+  videoFullscreen.classList.remove("hidden");
+}
+
+function exitFullscreen() {
+  videoFullscreen.classList.add("hidden");
+  remoteVideoFull.srcObject = null;
+  localVideoFull.srcObject = null;
+  if (localStream || remoteStream) videoCall.classList.remove("hidden");
+}
+
+function makePipDraggable() {
+  let startX, startY, origLeft, origBottom;
+  function onPointerDown(e) {
+    if (e.target === pipCloseBtn) return;
+    startX = e.clientX; startY = e.clientY;
+    const rect = videoCall.getBoundingClientRect();
+    origLeft = rect.left;
+    origBottom = window.innerHeight - rect.bottom;
+    videoCall.style.cursor = "grabbing";
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+  }
+  function onPointerMove(e) {
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    const newLeft = Math.max(0, Math.min(window.innerWidth - videoCall.offsetWidth, origLeft + dx));
+    const newBottom = Math.max(0, Math.min(window.innerHeight - videoCall.offsetHeight, origBottom - dy));
+    videoCall.style.left = newLeft + "px";
+    videoCall.style.right = "auto";
+    videoCall.style.bottom = newBottom + "px";
+  }
+  function onPointerUp() {
+    videoCall.style.cursor = "grab";
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+  }
+  videoCall.addEventListener("pointerdown", onPointerDown);
 }
 
 function sendData(data) {
@@ -774,6 +849,18 @@ disconnectBtn.addEventListener("click", () => {
 
 startCallBtn.addEventListener("click", startVideoCall);
 endCallBtn.addEventListener("click", () => stopVideoCall(true));
+fullscreenBtn.addEventListener("click", enterFullscreen);
+exitFullscreenBtn.addEventListener("click", exitFullscreen);
+endCallFsBtn.addEventListener("click", () => { exitFullscreen(); stopVideoCall(true); });
+pipCloseBtn.addEventListener("click", () => stopVideoCall(true));
+
+// Back button: return to sidebar on mobile
+backBtn.addEventListener("click", () => {
+  showSidebar();
+});
+
+// Also slide back when peer disconnects
+const _origResetPeer = resetPeer;
 
 const params = new URLSearchParams(location.search);
 
