@@ -115,6 +115,9 @@
               <span class="muted">Signed in</span>
               <strong id="currentUser"></strong>
             </div>
+            <button class="icon-btn theme-toggle" id="themeToggle" type="button" title="Toggle dark mode">
+              <span id="themeIcon">🌙</span>
+            </button>
             <button class="ghost" id="profileBtn" type="button">Profile</button>
             <button class="ghost" id="logoutBtn" type="button">Logout</button>
           </div>
@@ -150,7 +153,7 @@
           </form>
           <div class="search-result" id="searchResult"></div>
 
-          <h2>Online Users</h2>
+          <h2>Online Users <button class="refresh-btn" id="refreshBtn" type="button" title="Refresh users">↺</button></h2>
           <div id="mobileRequestBanner" class="mobile-request-banner hidden"></div>
           <div class="user-list" id="userList"></div>
         </aside>

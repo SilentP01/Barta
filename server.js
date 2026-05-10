@@ -853,6 +853,10 @@ function handleSocketMessage(ws, user, raw) {
     broadcastPresence();
     send(ws, "peer-disconnected");
   }
+
+  if (message.type === "refresh-presence") {
+    broadcastPresence();
+  }
 }
 
 function wsSend(ws, text) {

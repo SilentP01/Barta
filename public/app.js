@@ -57,6 +57,9 @@ const pipCloseBtn = document.querySelector("#pipCloseBtn");
 const exitFullscreenBtn = document.querySelector("#exitFullscreenBtn");
 const endCallFsBtn = document.querySelector("#endCallFsBtn");
 const mobileRequestBanner = document.querySelector("#mobileRequestBanner");
+const themeToggle = document.querySelector("#themeToggle");
+const themeIcon = document.querySelector("#themeIcon");
+const refreshBtn = document.querySelector("#refreshBtn");
 
 let me = null;
 let socket;
@@ -327,10 +330,28 @@ async function startPeer(isInitiator) {
     });
   };
 
+  let disconnectTimer = null;
   peer.onconnectionstatechange = () => {
-    if (["failed", "closed", "disconnected"].includes(peer.connectionState) && currentPeer) {
-      sendSocket("disconnect-peer");
-      resetPeer();
+    const state = peer.connectionState;
+    if (state === "connected") {
+      // Clear any pending disconnect timer when we recover
+      if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
+    } else if (state === "disconnected") {
+      // "disconnected" is often temporary during ICE restarts — wait 8 seconds before giving up
+      disconnectTimer = setTimeout(() => {
+        if (peer && peer.connectionState === "disconnected" && currentPeer) {
+          sendSocket("disconnect-peer");
+          resetPeer("Connection lost");
+        }
+      }, 8000);
+    } else if (state === "failed") {
+      if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
+      if (currentPeer) {
+        sendSocket("disconnect-peer");
+        resetPeer("Connection failed");
+      }
+    } else if (state === "closed") {
+      if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
     }
   };
 
@@ -884,6 +905,30 @@ pipCloseBtn.addEventListener("click", () => stopVideoCall(true));
 
 // Back button: return to sidebar on mobile
 backBtn.addEventListener("click", showSidebar);
+
+// Theme Toggle
+themeToggle.addEventListener("click", () => {
+  const currentTheme = document.documentElement.getAttribute("data-theme");
+  const newTheme = currentTheme === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", newTheme);
+  themeIcon.textContent = newTheme === "dark" ? "☀️" : "🌙";
+  localStorage.setItem("barta-theme", newTheme);
+});
+
+// Load saved theme
+const savedTheme = localStorage.getItem("barta-theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+document.documentElement.setAttribute("data-theme", savedTheme);
+themeIcon.textContent = savedTheme === "dark" ? "☀️" : "🌙";
+
+// Refresh Users
+refreshBtn.addEventListener("click", () => {
+  if (socket?.readyState === WebSocket.OPEN) {
+    sendSocket("refresh-presence");
+    refreshBtn.style.animation = "spin 1s linear infinite";
+    setTimeout(() => refreshBtn.style.animation = "", 1000);
+  }
+});
+
 
 const params = new URLSearchParams(location.search);
 

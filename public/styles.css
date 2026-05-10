@@ -12,6 +12,31 @@
   --shadow: 0 1px 3px rgba(0,0,0,.08), 0 8px 24px rgba(0,0,0,.06);
 }
 
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1117;
+  --panel: #1a1d27;
+  --ink: #f1f5f9;
+  --muted: #94a3b8;
+  --line: #2a2d3a;
+  --accent: #14b8a6;
+  --accent-dark: #0d9488;
+  --danger: #f87171;
+  --success: #4ade80;
+  --shadow: 0 1px 3px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+}
+
+[data-theme="dark"] input { background: #0f1117; color: var(--ink); }
+[data-theme="dark"] .messages { background: #0f1117; }
+[data-theme="dark"] .message { background: #1a1d27; border-color: #2a2d3a; }
+[data-theme="dark"] .message.mine { background: #134e4a; border-color: #0d9488; }
+[data-theme="dark"] #messageInput { background: #1a1d27; }
+[data-theme="dark"] .tab, [data-theme="dark"] .ghost, [data-theme="dark"] .secondary { background: #2a2d3a; color: var(--ink); }
+[data-theme="dark"] .tab.active { background: var(--ink); color: #0f1117; }
+[data-theme="dark"] .auth-panel { background: #1a1d27; }
+[data-theme="dark"] .profile-panel { background: #0f1117; }
+[data-theme="dark"] .user-row, [data-theme="dark"] .request-row { background: #1a1d27; }
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body {
@@ -155,7 +180,32 @@ input:focus { border-color: var(--accent); outline: 3px solid rgba(15,124,134,.1
   font-size: .78rem; color: var(--muted);
   text-transform: uppercase; letter-spacing: .06em;
   margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
+
+.refresh-btn {
+  background: none;
+  color: var(--accent);
+  font-size: 1.1rem;
+  padding: 4px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: transform 0.2s;
+}
+
+.refresh-btn:hover {
+  transform: rotate(45deg);
+}
+
+.theme-toggle {
+  width: 36px !important;
+  height: 36px !important;
+  padding: 0 !important;
+  font-size: 1.1rem;
+}
+
 
 .user-list { display: grid; gap: 6px; overflow-y: auto; padding-right: 2px; flex: 1; }
 
@@ -493,4 +543,9 @@ input:focus { border-color: var(--accent); outline: 3px solid rgba(15,124,134,.1
 @supports (padding: env(safe-area-inset-bottom)) {
   .composer { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
   .fullscreen-controls { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
