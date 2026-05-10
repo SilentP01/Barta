@@ -67,7 +67,7 @@ async function initDatabase() {
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     token_hash TEXT NOT NULL UNIQUE,
-    expires_at INTEGER NOT NULL,
+    expires_at BIGINT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 
@@ -79,7 +79,7 @@ async function initDatabase() {
     username TEXT,
     password_hash TEXT,
     code_hash TEXT NOT NULL,
-    expires_at INTEGER NOT NULL,
+    expires_at BIGINT NOT NULL,
     attempts INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
   );
@@ -92,10 +92,15 @@ async function initDatabase() {
     username TEXT,
     password_hash TEXT,
     token_hash TEXT NOT NULL UNIQUE,
-    expires_at INTEGER NOT NULL,
-    used_at INTEGER,
+    expires_at BIGINT NOT NULL,
+    used_at BIGINT,
     created_at TEXT NOT NULL
   );
+
+  ALTER TABLE sessions ALTER COLUMN expires_at TYPE BIGINT;
+  ALTER TABLE otps ALTER COLUMN expires_at TYPE BIGINT;
+  ALTER TABLE magic_links ALTER COLUMN expires_at TYPE BIGINT;
+  ALTER TABLE magic_links ALTER COLUMN used_at TYPE BIGINT;
 
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
