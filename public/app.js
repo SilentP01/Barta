@@ -63,6 +63,8 @@ let activeObjectUrls = [];
 const rtcConfig = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun.cloudflare.com:3478" },
+    { urls: "stun:global.stun.twilio.com:3478" },
     {
       urls: "turn:openrelay.metered.ca:80",
       username: "openrelayproject",
@@ -78,9 +80,7 @@ const rtcConfig = {
       username: "openrelayproject",
       credential: "openrelayproject"
     }
-  ],
-  bundlePolicy: "max-bundle",
-  rtcpMuxPolicy: "require"
+  ]
 };
 
 function setNotice(text = "") {
@@ -200,6 +200,8 @@ function showPeer(peerUser) {
   peerName.textContent = `@${peerUser.username}`;
   setComposerReady(false);
   emptyState.classList.add("hidden");
+  requests.innerHTML = "";
+  searchResult.textContent = "";
   peerView.classList.remove("hidden");
   messages.innerHTML = "";
   addSystemMessage("Connecting securely");
@@ -293,17 +295,21 @@ async function startPeer(isInitiator) {
     }
   };
 
-  if (isInitiator) {
-    channel = peer.createDataChannel("private-share", { ordered: true });
-    setupChannel();
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    sendSocket("signal", { signal: { description: peer.localDescription } });
-  } else {
-    peer.ondatachannel = (event) => {
-      channel = event.channel;
+  try {
+    if (isInitiator) {
+      channel = peer.createDataChannel("private-share", { ordered: true });
       setupChannel();
-    };
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      sendSocket("signal", { signal: { description: peer.localDescription } });
+    } else {
+      peer.ondatachannel = (event) => {
+        channel = event.channel;
+        setupChannel();
+      };
+    }
+  } catch (err) {
+    addSystemMessage("WebRTC Error: " + err.message);
   }
 
   const queued = queuedBeforeStart.concat(pendingSignals);
