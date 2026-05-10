@@ -5,7 +5,7 @@ const path = require("path");
 const { Pool } = require("pg");
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || "127.0.0.1";
+const HOST = process.env.HOST || "0.0.0.0";
 const PUBLIC_DIR = path.join(__dirname, "public");
 const SESSION_COOKIE = "p2p_session";
 const SESSION_TTL_MS = 15 * 60 * 1000;
