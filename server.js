@@ -913,9 +913,13 @@ server.on("upgrade", (req, socket) => {
 
 initDatabase()
   .then(() => {
-    server.listen(PORT, HOST, () => {
-      console.log(`Barta running at http://${HOST}:${PORT}`);
-      console.log(`Email magic links: ${emailServiceReady() ? "configured" : "not configured"}`);
+    const PORT = process.env.PORT || 3000;
+
+    server.listen(PORT, "0.0.0.0", () => {
+      console.log(`Barta running at http://0.0.0.0:${PORT}`);
+      console.log(
+        `Email magic links: ${emailServiceReady() ? "configured" : "not configured"}`
+      );
     });
   })
   .catch((error) => {
