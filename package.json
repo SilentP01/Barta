@@ -1,0 +1,16 @@
+{
+  "name": "barta",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Barta private account-based P2P sharing app",
+  "main": "server.js",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  }
+}

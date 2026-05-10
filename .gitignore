@@ -1,0 +1,10 @@
+node_modules/
+*.sqlite
+*.sqlite-*
+*.db
+.env
+*.log
+server.log
+server.err
+tmp-*.log
+

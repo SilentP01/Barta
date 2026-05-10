@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Barta</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="auth-view" id="authView">
+        <div class="brand">
+          <span class="brand-mark"></span>
+          <div>
+            <h1>Barta</h1>
+            <p>Sign in to start a private session.</p>
+          </div>
+        </div>
+
+        <div class="auth-panel">
+          <div class="tabs" role="tablist">
+            <button class="tab active" id="loginTab" type="button">Login</button>
+            <button class="tab" id="signupTab" type="button">Signup</button>
+          </div>
+
+          <form id="loginForm" class="form">
+            <label>
+              Username or email
+              <input name="identifier" autocomplete="username" required />
+            </label>
+            <label>
+              Password
+              <div class="password-field">
+                <input name="password" type="password" autocomplete="current-password" required />
+                <button class="ghost password-toggle" type="button" data-toggle-password>Show</button>
+              </div>
+            </label>
+            <button class="primary" type="submit" data-default-text="Login">Login</button>
+            <button class="ghost" id="forgotPasswordBtn" type="button">Forgot password</button>
+          </form>
+
+          <form id="signupForm" class="form hidden">
+            <label>
+              Email
+              <input name="email" type="email" autocomplete="email" required />
+            </label>
+            <label>
+              Unique username
+              <input name="username" autocomplete="username" pattern="[A-Za-z0-9_]{3,24}" required />
+            </label>
+            <label>
+              Password
+              <div class="password-field">
+                <input name="password" type="password" autocomplete="new-password" minlength="10" required />
+                <button class="ghost password-toggle" type="button" data-toggle-password>Show</button>
+              </div>
+            </label>
+            <label>
+              Confirm password
+              <div class="password-field">
+                <input name="passwordConfirm" type="password" autocomplete="new-password" minlength="10" required />
+                <button class="ghost password-toggle" type="button" data-toggle-password>Show</button>
+              </div>
+            </label>
+            <button class="primary" type="submit" data-default-text="Create account">Create account</button>
+          </form>
+
+          <form id="verifyForm" class="form hidden">
+            <label>
+              Email
+              <input name="email" type="email" autocomplete="email" readonly required />
+            </label>
+            <button class="primary" id="resendVerifyBtn" type="button">Resend magic link</button>
+            <button class="ghost" id="verifyBackBtn" type="button">Back to login</button>
+          </form>
+
+          <form id="forgotForm" class="form hidden">
+            <label>
+              Email
+              <input name="email" type="email" autocomplete="email" required />
+            </label>
+            <button class="primary" type="submit" data-default-text="Send reset link">Send reset link</button>
+            <button class="ghost" id="backToLoginBtn" type="button">Back to login</button>
+          </form>
+
+          <form id="resetForm" class="form hidden">
+            <input name="token" type="hidden" />
+            <label>
+              New password
+              <div class="password-field">
+                <input name="password" type="password" autocomplete="new-password" minlength="10" required />
+                <button class="ghost password-toggle" type="button" data-toggle-password>Show</button>
+              </div>
+            </label>
+            <label>
+              Confirm password
+              <div class="password-field">
+                <input name="passwordConfirm" type="password" autocomplete="new-password" minlength="10" required />
+                <button class="ghost password-toggle" type="button" data-toggle-password>Show</button>
+              </div>
+            </label>
+            <button class="primary" type="submit" data-default-text="Reset password">Reset password</button>
+          </form>
+          <p class="notice" id="authNotice"></p>
+        </div>
+      </section>
+
+      <section class="dashboard hidden" id="dashboard">
+        <aside class="sidebar">
+          <div class="account">
+            <div>
+              <span class="muted">Signed in</span>
+              <strong id="currentUser"></strong>
+            </div>
+            <button class="ghost" id="profileBtn" type="button">Profile</button>
+            <button class="ghost" id="logoutBtn" type="button">Logout</button>
+          </div>
+
+          <div class="profile-panel hidden" id="profilePanel">
+            <div class="profile-head">
+              <strong>Profile</strong>
+              <button class="ghost" id="closeProfileBtn" type="button">Close</button>
+            </div>
+            <p class="muted" id="profileEmail"></p>
+
+            <form class="form compact-form" id="profileEmailForm">
+              <label>
+                New email
+                <input name="email" type="email" autocomplete="email" required />
+              </label>
+              <button class="secondary" type="submit" data-default-text="Send email link">Send email link</button>
+            </form>
+
+            <form class="form compact-form hidden" id="profileEmailVerifyForm"></form>
+
+            <form class="form compact-form" id="profilePasswordOtpForm">
+              <button class="secondary" type="submit" data-default-text="Send password link">Send password link</button>
+            </form>
+
+            <form class="form compact-form hidden" id="profilePasswordForm"></form>
+            <p class="notice" id="profileNotice"></p>
+          </div>
+
+          <form class="search" id="searchForm">
+            <input name="username" placeholder="Search username" autocomplete="off" />
+            <button type="submit">Search</button>
+          </form>
+          <div class="search-result" id="searchResult"></div>
+
+          <h2>Online Users</h2>
+          <div class="user-list" id="userList"></div>
+        </aside>
+
+        <section class="workspace">
+          <div class="requests" id="requests"></div>
+
+          <div class="empty-state" id="emptyState">
+            <h2>No active connection</h2>
+            <p>Select an online user to send a request.</p>
+          </div>
+
+          <div class="peer-view hidden" id="peerView">
+            <header class="peer-header">
+              <div>
+                <span class="muted" id="peerStatus">Connecting</span>
+                <h2 id="peerName"></h2>
+              </div>
+              <div class="peer-actions">
+                <button class="secondary" id="startCallBtn" type="button" disabled>Video</button>
+                <button class="danger hidden" id="endCallBtn" type="button">End video</button>
+              </div>
+              <button class="danger" id="disconnectBtn" type="button">Disconnect</button>
+            </header>
+
+            <div class="video-call hidden" id="videoCall">
+              <video id="remoteVideo" autoplay playsinline></video>
+              <video id="localVideo" autoplay muted playsinline></video>
+            </div>
+
+            <div class="messages" id="messages"></div>
+
+            <form class="composer" id="messageForm">
+              <input id="messageInput" placeholder="Waiting for peer connection" autocomplete="off" disabled />
+              <input id="fileInput" type="file" hidden />
+              <button class="secondary" id="fileBtn" type="button" disabled>File</button>
+              <button class="primary" id="sendBtn" type="submit" disabled>Send</button>
+            </form>
+          </div>
+        </section>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
