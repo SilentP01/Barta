@@ -884,6 +884,7 @@ function wsSend(ws, text) {
 function readFrame(buffer) {
   if (buffer.length < 2) return null;
 
+  const fin = (buffer[0] & 0x80) === 0x80;
   const opcode = buffer[0] & 0x0f;
   const masked = Boolean(buffer[1] & 0x80);
   let length = buffer[1] & 0x7f;
@@ -906,7 +907,7 @@ function readFrame(buffer) {
   const payload = Buffer.from(buffer.subarray(offset, offset + length));
   for (let index = 0; index < payload.length; index += 1) payload[index] ^= mask[index % 4];
 
-  return { opcode, payload, bytes: offset + length };
+  return { fin, opcode, payload, bytes: offset + length };
 }
 
 async function acceptWebSocket(req, socket) {
@@ -951,16 +952,28 @@ async function acceptWebSocket(req, socket) {
   broadcastPresence();
 
   let buffer = Buffer.alloc(0);
+  let messageFragments = [];
+
   socket.on("data", (chunk) => {
     buffer = Buffer.concat([buffer, chunk]);
     let frame = readFrame(buffer);
     while (frame) {
       buffer = buffer.subarray(frame.bytes);
+      
       if (frame.opcode === 0x8) {
         socket.end();
         return;
       }
-      if (frame.opcode === 0x1) handleSocketMessage(socket, user, frame.payload.toString("utf8"));
+
+      if (frame.opcode === 0x1 || frame.opcode === 0x0) {
+        messageFragments.push(frame.payload);
+        if (frame.fin) {
+          const fullMessage = Buffer.concat(messageFragments).toString("utf8");
+          messageFragments = [];
+          handleSocketMessage(socket, user, fullMessage);
+        }
+      }
+      
       frame = readFrame(buffer);
     }
   });

@@ -186,12 +186,13 @@ function renderUsers(users = []) {
         <div class="status ${user.status}">${user.status}</div>
       </div>
     `;
-    const button = document.createElement("button");
-    button.className = "secondary";
-    button.textContent = "Request";
-    button.disabled = user.status !== "online" || Boolean(currentPeer);
-    button.addEventListener("click", () => sendSocket("request", { to: user.id }));
-    row.appendChild(button);
+    if (user.status === "online" && !currentPeer) {
+      const button = document.createElement("button");
+      button.className = "secondary";
+      button.textContent = "Request";
+      button.addEventListener("click", () => sendSocket("request", { to: user.id }));
+      row.appendChild(button);
+    }
     userList.appendChild(row);
   }
 }
