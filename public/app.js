@@ -277,7 +277,7 @@ function setComposerReady(isReady) {
   muteBtn.disabled = !isReady;
   pauseBtn.disabled = !isReady;
   messageInput.placeholder = isReady ? "Message" : "Waiting for peer connection";
-  peerStatus.textContent = isReady ? "Connected with" : "Connecting";
+  peerStatus.textContent = isReady ? "CONNECTED WITH" : "CONNECTING";
 }
 
 function connectSocket() {
