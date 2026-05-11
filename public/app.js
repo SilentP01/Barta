@@ -332,6 +332,8 @@ async function startPeer(isInitiator) {
       remoteVideo.srcObject = remoteStream;
     }
     remoteStream.addTrack(event.track);
+    remoteVideo.play().catch(() => {});
+    if (remoteVideoFull) remoteVideoFull.play().catch(() => {});
     // Only show video UI if there is actually a video track
     const hasVideo = remoteStream.getVideoTracks().length > 0;
     if (hasVideo) videoCall.classList.remove("hidden");
@@ -458,6 +460,8 @@ async function _actuallyStartCall(withVideo = true) {
     if (withVideo) {
       localVideo.srcObject = localStream;
       remoteVideo.srcObject = remoteStream || null;
+      localVideo.play().catch(() => {});
+      if (remoteStream) remoteVideo.play().catch(() => {});
       videoCall.classList.remove("hidden");
       fullscreenBtn.classList.remove("hidden");
       makePipDraggable();
