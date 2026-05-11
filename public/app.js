@@ -58,10 +58,17 @@ const exitFullscreenBtn = document.querySelector("#exitFullscreenBtn");
 const endCallFsBtn = document.querySelector("#endCallFsBtn");
 const muteFsBtn = document.querySelector("#muteFsBtn");
 const pauseFsBtn = document.querySelector("#pauseFsBtn");
+const callRequestOverlay = document.querySelector("#callRequestOverlay");
+const callRequestText = document.querySelector("#callRequestText");
+const callRequestIcon = document.querySelector("#callRequestIcon");
+const callAcceptBtn = document.querySelector("#callAcceptBtn");
+const callRejectBtn = document.querySelector("#callRejectBtn");
 const mobileRequestBanner = document.querySelector("#mobileRequestBanner");
 const themeToggle = document.querySelector("#themeToggle");
 const themeIcon = document.querySelector("#themeIcon");
 const refreshBtn = document.querySelector("#refreshBtn");
+
+let pendingCallKind = null; // 'video-request' | 'audio-request' — set on receiver side
 
 let me = null;
 let socket;
@@ -433,6 +440,17 @@ function setupChannel() {
 
 async function startCall(withVideo = true) {
   if (!peer || !currentPeer || localStream) return;
+  // Send a call request to peer — they must accept before media starts
+  const kind = withVideo ? "video-request" : "audio-request";
+  if (!sendData(JSON.stringify({ kind }))) return;
+  addSystemMessage(withVideo ? "📹 Calling…" : "🎙️ Calling…");
+  // Disable call buttons until accepted/rejected
+  startCallBtn.disabled = true;
+  startAudioBtn.disabled = true;
+}
+
+async function _actuallyStartCall(withVideo = true) {
+  if (!peer || !currentPeer || localStream) return;
   try {
     localStream = await navigator.mediaDevices.getUserMedia(
       withVideo ? { video: true, audio: true } : { video: false, audio: true }
@@ -448,13 +466,20 @@ async function startCall(withVideo = true) {
     startAudioBtn.classList.add("hidden");
     endCallBtn.classList.remove("hidden");
     for (const track of localStream.getTracks()) peer.addTrack(track, localStream);
-    const kind = withVideo ? "video-start" : "audio-start";
-    if (channel?.readyState === "open") sendData(JSON.stringify({ kind }));
+    const notifyKind = withVideo ? "video-start" : "audio-start";
+    if (channel?.readyState === "open") sendData(JSON.stringify({ kind: notifyKind }));
     await renegotiatePeer();
   } catch (error) {
     addSystemMessage("Permission denied: " + error.message);
+    startCallBtn.disabled = false;
+    startAudioBtn.disabled = false;
   }
 }
+
+const MIC_ON_SVG = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
+const MIC_OFF_SVG = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
+const CAM_ON_SVG  = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`;
+const CAM_OFF_SVG = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34"/><path d="M16 11.37A4 4 0 1 1 12.63 8"/></svg>`;
 
 function toggleAudio() {
   if (!localStream) return;
@@ -462,9 +487,9 @@ function toggleAudio() {
   if (!audioTrack) return;
   audioTrack.enabled = !audioTrack.enabled;
   const isMuted = !audioTrack.enabled;
-  muteBtn.classList.toggle("active-opt", isMuted);
   muteFsBtn.classList.toggle("active-opt", isMuted);
-  muteFsBtn.textContent = isMuted ? "Unmute" : "Mute";
+  muteFsBtn.innerHTML = isMuted ? MIC_OFF_SVG : MIC_ON_SVG;
+  muteFsBtn.title = isMuted ? "Unmute" : "Mute";
 }
 
 function toggleVideo() {
@@ -473,9 +498,9 @@ function toggleVideo() {
   if (!videoTrack) return;
   videoTrack.enabled = !videoTrack.enabled;
   const isPaused = !videoTrack.enabled;
-  pauseBtn.classList.toggle("active-opt", isPaused);
   pauseFsBtn.classList.toggle("active-opt", isPaused);
-  pauseFsBtn.textContent = isPaused ? "Start Video" : "Stop Video";
+  pauseFsBtn.innerHTML = isPaused ? CAM_OFF_SVG : CAM_ON_SVG;
+  pauseFsBtn.title = isPaused ? "Resume Video" : "Pause Video";
 }
 
 function startVideoCall() { return startCall(true); }
@@ -497,18 +522,30 @@ async function stopVideoCall(renegotiate = true) {
   localStream = null;
   localVideo.srcObject = null;
   localVideoFull.srcObject = null;
+
   if (!renegotiate && remoteStream) {
     for (const track of remoteStream.getTracks()) track.stop();
     remoteStream = null;
     remoteVideo.srcObject = null;
     remoteVideoFull.srcObject = null;
   }
+
+  // Always hide the floating PiP
+  videoCall.classList.add("hidden");
+
   startCallBtn.classList.remove("hidden");
   startAudioBtn.classList.remove("hidden");
   endCallBtn.classList.add("hidden");
   fullscreenBtn.classList.add("hidden");
+  startCallBtn.disabled = false;
+  startAudioBtn.disabled = false;
 
-  if (!remoteStream?.getVideoTracks().length) videoCall.classList.add("hidden");
+  // Reset toggle icons
+  muteFsBtn.innerHTML = MIC_ON_SVG;
+  muteFsBtn.classList.remove("active-opt");
+  pauseFsBtn.innerHTML = CAM_ON_SVG;
+  pauseFsBtn.classList.remove("active-opt");
+
   if (channel?.readyState === "open") sendData(JSON.stringify({ kind: "call-ended" }));
   if (renegotiate) await renegotiatePeer();
 }
@@ -616,13 +653,67 @@ function addFileMessage(file, url, mine = false) {
   messages.scrollTop = messages.scrollHeight;
 }
 
+function showCallRequestPopup(kind) {
+  pendingCallKind = kind;
+  const isVideo = kind === "video-request";
+  callRequestText.textContent = isVideo
+    ? `📹 @${currentPeer?.username} wants to start a video call`
+    : `🎙️ @${currentPeer?.username} wants to start a voice call`;
+  callRequestIcon.innerHTML = isVideo
+    ? `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`
+    : `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.72 11 19.79 19.79 0 0 1 1.67 2.37 2 2 0 0 1 3.64.36h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 7.91a16 16 0 0 0 6.16 6.16l.92-.92a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`;
+  callRequestOverlay.classList.remove("hidden");
+}
+
+function hideCallRequestPopup() {
+  callRequestOverlay.classList.add("hidden");
+  pendingCallKind = null;
+}
+
 function receiveData(data) {
   if (typeof data === "string") {
     const packet = JSON.parse(data);
     if (packet.kind === "message") addMessage(packet.text);
+
+    // Incoming call requests — show accept/reject popup
+    if (packet.kind === "video-request" || packet.kind === "audio-request") {
+      showCallRequestPopup(packet.kind);
+      return;
+    }
+    // Caller was told: accepted
+    if (packet.kind === "call-accepted") {
+      const withVideo = packet.callKind === "video-request";
+      _actuallyStartCall(withVideo);
+      return;
+    }
+    // Caller was told: rejected
+    if (packet.kind === "call-rejected") {
+      addSystemMessage("Call rejected.");
+      startCallBtn.disabled = false;
+      startAudioBtn.disabled = false;
+      return;
+    }
+
     if (packet.kind === "video-start") addSystemMessage("📹 Video call started");
     if (packet.kind === "audio-start") addSystemMessage("🎙️ Voice call started");
-    if (packet.kind === "call-ended" || packet.kind === "video-ended") addSystemMessage("Call ended");
+    if (packet.kind === "call-ended" || packet.kind === "video-ended") {
+      addSystemMessage("Call ended");
+      // Force-hide PiP if remote ended
+      if (!localStream) {
+        videoCall.classList.add("hidden");
+        if (remoteStream) {
+          for (const track of remoteStream.getTracks()) track.stop();
+          remoteStream = null;
+          remoteVideo.srcObject = null;
+          remoteVideoFull.srcObject = null;
+        }
+        exitFullscreen();
+        fullscreenBtn.classList.add("hidden");
+        startCallBtn.classList.remove("hidden");
+        startAudioBtn.classList.remove("hidden");
+        endCallBtn.classList.add("hidden");
+      }
+    }
     if (packet.kind === "file-start") incomingFiles.set(packet.id, { meta: packet, chunks: [] });
     if (packet.kind === "file-end") {
       const file = incomingFiles.get(packet.id);
@@ -933,6 +1024,25 @@ fullscreenBtn.addEventListener("click", enterFullscreen);
 exitFullscreenBtn.addEventListener("click", exitFullscreen);
 endCallFsBtn.addEventListener("click", () => { exitFullscreen(); stopVideoCall(true); });
 pipCloseBtn.addEventListener("click", () => stopVideoCall(true));
+
+// Call request: accept
+callAcceptBtn.addEventListener("click", () => {
+  const kind = pendingCallKind;
+  hideCallRequestPopup();
+  if (!kind) return;
+  // Tell caller we accepted and start media on our side
+  sendData(JSON.stringify({ kind: "call-accepted", callKind: kind }));
+  _actuallyStartCall(kind === "video-request");
+});
+
+// Call request: reject
+callRejectBtn.addEventListener("click", () => {
+  const kind = pendingCallKind;
+  hideCallRequestPopup();
+  if (!kind) return;
+  sendData(JSON.stringify({ kind: "call-rejected" }));
+  addSystemMessage("Call rejected.");
+});
 
 // Back button: return to sidebar on mobile
 backBtn.addEventListener("click", showSidebar);
