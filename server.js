@@ -53,7 +53,6 @@ const mimeTypes = {
 };
 
 async function initDatabase() {
-  
   await pool.query(`
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -62,14 +61,6 @@ async function initDatabase() {
     password_hash TEXT NOT NULL,
     email_verified INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS sessions (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    token_hash TEXT NOT NULL UNIQUE,
-    expires_at BIGINT NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 
   CREATE TABLE IF NOT EXISTS otps (
@@ -98,18 +89,18 @@ async function initDatabase() {
     created_at TEXT NOT NULL
   );
 
-  ALTER TABLE sessions ALTER COLUMN expires_at TYPE BIGINT;
   ALTER TABLE otps ALTER COLUMN expires_at TYPE BIGINT;
   ALTER TABLE magic_links ALTER COLUMN expires_at TYPE BIGINT;
   ALTER TABLE magic_links ALTER COLUMN used_at TYPE BIGINT;
 
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-  CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
-  CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
   CREATE INDEX IF NOT EXISTS idx_magic_links_token_hash ON magic_links(token_hash);
   CREATE INDEX IF NOT EXISTS idx_magic_links_email_purpose ON magic_links(email, purpose);
-`);
+  `);
+
+  // Drop the sessions table if it exists (migrate to in-memory sessions)
+  await pool.query(`DROP TABLE IF EXISTS sessions CASCADE;`).catch(() => {});
 }
 
 async function one(sql, params = []) {
@@ -235,37 +226,40 @@ function getBaseUrl(req) {
   return `${proto}://${host}`;
 }
 
+// ─── IN-MEMORY SESSION STORE (zero persistence) ──────────────────────────────
+// Sessions live only in RAM. They are lost on server restart by design.
+const sessionStore = new Map(); // tokenHash -> { userId, expiresAt }
+
+// Clean up expired sessions every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of sessionStore) {
+    if (val.expiresAt <= now) sessionStore.delete(key);
+  }
+}, 10 * 60 * 1000);
+
 async function createSession(user) {
   const token = crypto.randomBytes(32).toString("base64url");
-  await run("INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)", [
-    crypto.randomUUID(),
-    user.id,
-    hashToken(token),
-    Date.now() + SESSION_TTL_MS
-  ]);
+  const tokenHash = hashToken(token);
+  sessionStore.set(tokenHash, { userId: user.id, expiresAt: Date.now() + SESSION_TTL_MS });
   return token;
 }
 
 async function getSessionUser(req) {
   const token = parseCookies(req)[SESSION_COOKIE];
   if (!token) return null;
-  setInterval(async () => {
-    await run("DELETE FROM sessions WHERE expires_at <= $1", [Date.now()]);
-  }, 5 * 60 * 1000);
-  return one(
-    `
-      SELECT users.id, users.username
-      FROM sessions
-      JOIN users ON users.id = sessions.user_id
-      WHERE sessions.token_hash = $1 AND sessions.expires_at > $2
-    `,
-    [hashToken(token), Date.now()]
-  );
+  const tokenHash = hashToken(token);
+  const record = sessionStore.get(tokenHash);
+  if (!record || record.expiresAt <= Date.now()) {
+    sessionStore.delete(tokenHash);
+    return null;
+  }
+  return findUserById(record.userId);
 }
 
 async function clearSession(req, res) {
   const token = parseCookies(req)[SESSION_COOKIE];
-  if (token) await run("DELETE FROM sessions WHERE token_hash = $1", [hashToken(token)]);
+  if (token) sessionStore.delete(hashToken(token));
   return sendJsonWithHeaders(res, 200, { ok: true }, { "Set-Cookie": `${SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0; Secure` });
 }
 

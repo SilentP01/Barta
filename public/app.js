@@ -62,10 +62,6 @@ const mobileRequestBanner = document.querySelector("#mobileRequestBanner");
 const themeToggle = document.querySelector("#themeToggle");
 const themeIcon = document.querySelector("#themeIcon");
 const refreshBtn = document.querySelector("#refreshBtn");
-const muteBtn = document.querySelector("#muteBtn");
-const pauseBtn = document.querySelector("#pauseBtn");
-const muteFsBtn = document.querySelector("#muteFsBtn");
-const pauseFsBtn = document.querySelector("#pauseFsBtn");
 
 let me = null;
 let socket;
