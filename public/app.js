@@ -84,6 +84,9 @@ let pendingProfileEmail = "";
 let localStream;
 let remoteStream;
 let activeObjectUrls = [];
+let makingOffer = false;
+let ignoreOffer = false;
+let isPolite = false;
 
 const rtcConfig = {
   iceServers: [
@@ -266,6 +269,10 @@ function resetPeer(note = "Disconnected") {
   incomingFiles.clear();
   for (const url of activeObjectUrls) URL.revokeObjectURL(url);
   activeObjectUrls = [];
+  makingOffer = false;
+  ignoreOffer = false;
+  isPolite = false;
+  pendingCallKind = null;
   if (messages) messages.innerHTML = "";
   setComposerReady(false);
   peerView.classList.add("hidden");
@@ -318,12 +325,27 @@ function connectSocket() {
 }
 
 async function startPeer(isInitiator) {
+  isPolite = !isInitiator;
   const queuedBeforeStart = pendingSignals;
   pendingSignals = [];
   peer = new RTCPeerConnection(rtcConfig);
 
   peer.onicecandidate = (event) => {
     if (event.candidate) sendSocket("signal", { signal: { candidate: event.candidate } });
+  };
+
+  peer.onnegotiationneeded = async () => {
+    try {
+      makingOffer = true;
+      const offer = await peer.createOffer();
+      if (peer.signalingState !== "stable") return;
+      await peer.setLocalDescription(offer);
+      sendSocket("signal", { signal: { description: peer.localDescription } });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      makingOffer = false;
+    }
   };
 
   peer.ontrack = (event) => {
@@ -375,9 +397,6 @@ async function startPeer(isInitiator) {
     if (isInitiator) {
       channel = peer.createDataChannel("private-share", { ordered: true });
       setupChannel();
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      sendSocket("signal", { signal: { description: peer.localDescription } });
     } else {
       peer.ondatachannel = (event) => {
         channel = event.channel;
@@ -399,32 +418,37 @@ async function handleSignal(signal) {
     return;
   }
 
-  if (signal.description) {
-    await peer.setRemoteDescription(signal.description);
-    if (signal.description.type === "offer") {
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      sendSocket("signal", { signal: { description: peer.localDescription } });
-    }
-    const candidates = pendingIceCandidates;
-    pendingIceCandidates = [];
-    for (const candidate of candidates) await peer.addIceCandidate(candidate).catch(() => {});
-  }
+  try {
+    if (signal.description) {
+      const offerCollision = signal.description.type === "offer" &&
+                             (makingOffer || peer.signalingState !== "stable");
+      ignoreOffer = !isPolite && offerCollision;
+      if (ignoreOffer) return;
 
-  if (signal.candidate) {
-    if (!peer.remoteDescription) {
-      pendingIceCandidates.push(signal.candidate);
-      return;
+      await peer.setRemoteDescription(signal.description);
+      if (signal.description.type === "offer") {
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+        sendSocket("signal", { signal: { description: peer.localDescription } });
+      }
+      
+      const candidates = pendingIceCandidates;
+      pendingIceCandidates = [];
+      for (const candidate of candidates) {
+        await peer.addIceCandidate(candidate).catch(() => {});
+      }
     }
-    await peer.addIceCandidate(signal.candidate).catch(() => {});
-  }
-}
 
-async function renegotiatePeer() {
-  if (!peer || peer.signalingState !== "stable") return;
-  const offer = await peer.createOffer();
-  await peer.setLocalDescription(offer);
-  sendSocket("signal", { signal: { description: peer.localDescription } });
+    if (signal.candidate) {
+      try {
+        await peer.addIceCandidate(signal.candidate);
+      } catch (err) {
+        if (!ignoreOffer) console.error(err);
+      }
+    }
+  } catch (err) {
+    console.error("Signal error", err);
+  }
 }
 
 function setupChannel() {
@@ -473,7 +497,6 @@ async function _actuallyStartCall(withVideo = true) {
     for (const track of localStream.getTracks()) peer.addTrack(track, localStream);
     const notifyKind = withVideo ? "video-start" : "audio-start";
     if (channel?.readyState === "open") sendData(JSON.stringify({ kind: notifyKind }));
-    await renegotiatePeer();
   } catch (error) {
     addSystemMessage("Permission denied: " + error.message);
     startCallBtn.disabled = false;
@@ -543,11 +566,10 @@ function _cleanupCallUI() {
   pauseFsBtn.classList.remove("active-opt");
 }
 
-async function stopVideoCall(renegotiate = true) {
+async function stopVideoCall() {
   if (!localStream && !remoteStream) return;
   if (channel?.readyState === "open") sendData(JSON.stringify({ kind: "call-ended" }));
   _cleanupCallUI();
-  if (renegotiate) await renegotiatePeer();
 }
 
 function enterFullscreen() {
@@ -1008,11 +1030,11 @@ startCallBtn.addEventListener("click", startVideoCall);
 startAudioBtn.addEventListener("click", startAudioCall);
 muteFsBtn.addEventListener("click", toggleAudio);
 pauseFsBtn.addEventListener("click", toggleVideo);
-endCallBtn.addEventListener("click", () => stopVideoCall(true));
+endCallBtn.addEventListener("click", () => stopVideoCall());
 fullscreenBtn.addEventListener("click", enterFullscreen);
 exitFullscreenBtn.addEventListener("click", exitFullscreen);
-endCallFsBtn.addEventListener("click", () => { exitFullscreen(); stopVideoCall(true); });
-pipCloseBtn.addEventListener("click", () => stopVideoCall(true));
+endCallFsBtn.addEventListener("click", () => { exitFullscreen(); stopVideoCall(); });
+pipCloseBtn.addEventListener("click", () => stopVideoCall());
 
 // Call request: accept
 callAcceptBtn.addEventListener("click", () => {
