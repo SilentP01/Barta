@@ -462,6 +462,7 @@ async function _actuallyStartCall(withVideo = true) {
       fullscreenBtn.classList.remove("hidden");
       makePipDraggable();
     }
+    // For audio-only calls: no PiP, no fullscreen button
     startCallBtn.classList.add("hidden");
     startAudioBtn.classList.add("hidden");
     endCallBtn.classList.remove("hidden");
@@ -506,47 +507,42 @@ function toggleVideo() {
 function startVideoCall() { return startCall(true); }
 function startAudioCall() { return startCall(false); }
 
-async function stopVideoCall(renegotiate = true) {
-  if (!localStream && !remoteStream) return;
-
+// Shared local teardown used by both sides when a call ends
+function _cleanupCallUI() {
   exitFullscreen();
-
+  videoCall.classList.add("hidden");
   if (localStream) {
     for (const track of localStream.getTracks()) {
-      const sender = peer?.getSenders().find((item) => item.track === track);
+      const sender = peer?.getSenders().find((s) => s.track === track);
       if (sender) peer.removeTrack(sender);
       track.stop();
     }
+    localStream = null;
+    localVideo.srcObject = null;
+    localVideoFull.srcObject = null;
   }
-
-  localStream = null;
-  localVideo.srcObject = null;
-  localVideoFull.srcObject = null;
-
-  if (!renegotiate && remoteStream) {
+  if (remoteStream) {
     for (const track of remoteStream.getTracks()) track.stop();
     remoteStream = null;
     remoteVideo.srcObject = null;
     remoteVideoFull.srcObject = null;
   }
-
-  // Always hide the floating PiP
-  videoCall.classList.add("hidden");
-
   startCallBtn.classList.remove("hidden");
   startAudioBtn.classList.remove("hidden");
   endCallBtn.classList.add("hidden");
   fullscreenBtn.classList.add("hidden");
   startCallBtn.disabled = false;
   startAudioBtn.disabled = false;
-
-  // Reset toggle icons
   muteFsBtn.innerHTML = MIC_ON_SVG;
   muteFsBtn.classList.remove("active-opt");
   pauseFsBtn.innerHTML = CAM_ON_SVG;
   pauseFsBtn.classList.remove("active-opt");
+}
 
+async function stopVideoCall(renegotiate = true) {
+  if (!localStream && !remoteStream) return;
   if (channel?.readyState === "open") sendData(JSON.stringify({ kind: "call-ended" }));
+  _cleanupCallUI();
   if (renegotiate) await renegotiatePeer();
 }
 
@@ -562,7 +558,9 @@ function exitFullscreen() {
   videoFullscreen.classList.add("hidden");
   remoteVideoFull.srcObject = null;
   localVideoFull.srcObject = null;
-  if (localStream || remoteStream) videoCall.classList.remove("hidden");
+  // Only restore PiP if there is an active video track
+  const hasVideo = localStream?.getVideoTracks().length || remoteStream?.getVideoTracks().length;
+  if (hasVideo) videoCall.classList.remove("hidden");
 }
 
 function makePipDraggable() {
@@ -697,22 +695,9 @@ function receiveData(data) {
     if (packet.kind === "video-start") addSystemMessage("📹 Video call started");
     if (packet.kind === "audio-start") addSystemMessage("🎙️ Voice call started");
     if (packet.kind === "call-ended" || packet.kind === "video-ended") {
+      // When one side ends the call, the OTHER side also tears down immediately
       addSystemMessage("Call ended");
-      // Force-hide PiP if remote ended
-      if (!localStream) {
-        videoCall.classList.add("hidden");
-        if (remoteStream) {
-          for (const track of remoteStream.getTracks()) track.stop();
-          remoteStream = null;
-          remoteVideo.srcObject = null;
-          remoteVideoFull.srcObject = null;
-        }
-        exitFullscreen();
-        fullscreenBtn.classList.add("hidden");
-        startCallBtn.classList.remove("hidden");
-        startAudioBtn.classList.remove("hidden");
-        endCallBtn.classList.add("hidden");
-      }
+      _cleanupCallUI();
     }
     if (packet.kind === "file-start") incomingFiles.set(packet.id, { meta: packet, chunks: [] });
     if (packet.kind === "file-end") {
@@ -1099,3 +1084,28 @@ if (params.get("reset") === "1" && params.get("token")) {
       if (params.toString()) history.replaceState({}, "", "/");
     });
 }
+
+// ─── AUTO-UPDATE CHECK ────────────────────────────────────────────────────────
+// Poll /api/version every 60 s. If the server hash changes, reload the page.
+// Reload is deferred if the user is currently in a live call.
+(function autoUpdateCheck() {
+  let knownHash = null;
+  async function checkVersion() {
+    try {
+      const res = await fetch('/api/version', { cache: 'no-store' });
+      if (!res.ok) return;
+      const { hash } = await res.json();
+      if (!hash) return;
+      if (knownHash === null) { knownHash = hash; return; }
+      if (hash !== knownHash) {
+        if (!currentPeer || !localStream) {
+          knownHash = hash;
+          window.location.reload();
+        }
+        // If in a call, leave knownHash as is. The next poll will trigger this again.
+      }
+    } catch { /* ignore network errors */ }
+  }
+  setInterval(checkVersion, 60_000);
+  checkVersion();
+})();
