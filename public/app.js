@@ -2,6 +2,7 @@ const landingView = document.querySelector("#landingView");
 const landingLoginBtn = document.querySelector("#landingLoginBtn");
 const landingSignupBtn = document.querySelector("#landingSignupBtn");
 const getStartedBtn = document.querySelector("#getStartedBtn");
+const backToHomeBtn = document.querySelector("#backToHomeBtn");
 const authView = document.querySelector("#authView");
 const dashboard = document.querySelector("#dashboard");
 const loginTab = document.querySelector("#loginTab");
@@ -1115,6 +1116,8 @@ getStartedBtn.addEventListener("click", () => {
   showAuth();
   switchAuth("signup");
 });
+
+backToHomeBtn.addEventListener("click", showLanding);
 
 
 const params = new URLSearchParams(location.search);

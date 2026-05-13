@@ -48,7 +48,7 @@
 html, body {
   margin: 0;
   height: 100%;
-  overflow: hidden;
+  overflow-y: auto;
   overscroll-behavior: none;
 }
 
@@ -150,48 +150,106 @@ h1, h2, p { margin: 0; }
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 24px;
-  padding: 0 min(5%, 60px);
+  padding: 60px min(5%, 60px);
   max-width: 1200px;
   margin: 0 auto;
 }
 
-.landing-card {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  padding: 40px;
+.campaign-banner {
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  color: #fff;
+  padding: 60px 24px;
+  text-align: center;
+  border-radius: 32px;
+  margin: 60px min(5%, 60px);
+  box-shadow: 0 20px 40px -10px rgba(15, 124, 134, 0.4);
+}
+
+.campaign-banner h2 {
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  font-weight: 800;
+  margin-bottom: 16px;
+  line-height: 1.2;
+}
+
+.alternating-sections {
+  padding: 40px 0;
+}
+
+.alternating-row {
+  display: flex;
+  align-items: center;
+  gap: 60px;
+  padding: 80px min(5%, 60px);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.alternating-row:nth-child(even) {
+  flex-direction: row-reverse;
+}
+
+.row-image {
+  flex: 1;
+  min-width: 300px;
+}
+
+.row-image img {
+  width: 100%;
+  height: auto;
   border-radius: 24px;
-  transition: transform 0.3s, border-color 0.3s;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
+}
+
+.row-text {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
-.landing-card:hover {
-  transform: translateY(-6px);
-  border-color: var(--accent);
-}
-
-.card-icon {
+.row-text h2 {
   font-size: 2.5rem;
-  margin-bottom: 8px;
-}
-
-.landing-card h3 {
-  font-size: 1.5rem;
   font-weight: 700;
-  margin: 0;
 }
 
-.landing-card p {
+.row-text p {
+  font-size: 1.1rem;
   color: var(--muted);
-  line-height: 1.6;
+  line-height: 1.7;
+}
+
+.back-to-landing {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  z-index: 10;
 }
 
 /* Auth responsive tweak */
+@media (max-width: 900px) {
+  .alternating-row, .alternating-row:nth-child(even) {
+    flex-direction: column;
+    text-align: center;
+    gap: 40px;
+  }
+  .row-text h2 { font-size: 2rem; }
+  .auth-view {
+    grid-template-columns: 1fr;
+    padding-top: 80px;
+  }
+}
+
 @media (max-width: 768px) {
   .landing-hero { padding: 60px 24px; }
   .landing-grid { grid-template-columns: 1fr; }
   .landing-header { padding: 16px 20px; }
+  .campaign-banner { margin: 40px 20px; padding: 40px 20px; }
 }
 
 /* ─── AUTH ──────────────────────────────────── */
