@@ -1,3 +1,7 @@
+const landingView = document.querySelector("#landingView");
+const landingLoginBtn = document.querySelector("#landingLoginBtn");
+const landingSignupBtn = document.querySelector("#landingSignupBtn");
+const getStartedBtn = document.querySelector("#getStartedBtn");
 const authView = document.querySelector("#authView");
 const dashboard = document.querySelector("#dashboard");
 const loginTab = document.querySelector("#loginTab");
@@ -142,11 +146,18 @@ function sendSocket(type, payload = {}) {
 }
 
 function showApp() {
+  landingView.classList.add("hidden");
   authView.classList.add("hidden");
   dashboard.classList.remove("hidden");
   currentUser.textContent = `@${me.username}`;
   showSidebar();
   connectSocket();
+}
+
+function showLanding() {
+  landingView.classList.remove("hidden");
+  authView.classList.add("hidden");
+  dashboard.classList.add("hidden");
 }
 
 function showSidebar() {
@@ -160,6 +171,7 @@ function showWorkspace() {
 }
 
 function showAuth() {
+  landingView.classList.add("hidden");
   authView.classList.remove("hidden");
   dashboard.classList.add("hidden");
 }
@@ -895,7 +907,7 @@ logoutBtn.addEventListener("click", async () => {
   signupForm.reset();
   loginForm.elements.identifier.readOnly = true;
   loginForm.elements.password.readOnly = true;
-  showAuth();
+  showLanding();
 });
 
 profileBtn.addEventListener("click", async () => {
@@ -1089,6 +1101,21 @@ refreshBtn.addEventListener("click", () => {
   }
 });
 
+landingLoginBtn.addEventListener("click", () => {
+  showAuth();
+  switchAuth("login");
+});
+
+landingSignupBtn.addEventListener("click", () => {
+  showAuth();
+  switchAuth("signup");
+});
+
+getStartedBtn.addEventListener("click", () => {
+  showAuth();
+  switchAuth("signup");
+});
+
 
 const params = new URLSearchParams(location.search);
 
@@ -1110,7 +1137,7 @@ if (params.get("reset") === "1" && params.get("token")) {
       if (params.toString()) history.replaceState({}, "", "/");
     })
     .catch(() => {
-      showAuth();
+      showLanding();
       if (params.toString()) history.replaceState({}, "", "/");
     });
 }

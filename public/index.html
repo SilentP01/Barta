@@ -8,8 +8,65 @@
   </head>
   <body>
     <main class="app">
+      <!-- LANDING PAGE -->
+      <section class="landing-view hidden" id="landingView">
+        <header class="landing-header">
+          <div class="landing-logo">
+            <span class="brand-mark sm"></span>
+            <strong>Barta</strong>
+          </div>
+          <div class="landing-nav">
+            <button class="ghost" id="landingLoginBtn">Login</button>
+            <button class="primary" id="landingSignupBtn">Signup</button>
+          </div>
+        </header>
+
+        <div class="landing-hero">
+          <div class="hero-content">
+            <h1 class="hero-title">Communication, <br/><span>Reimagined.</span></h1>
+            <p class="hero-subtitle">Simple. Private. Anonymous. The way it was meant to be.</p>
+            <div class="hero-actions">
+              <button class="primary btn-lg" id="getStartedBtn">Explore Barta</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="landing-grid">
+          <div class="landing-card">
+            <div class="card-icon">🔒</div>
+            <h3>Absolute Privacy</h3>
+            <p>Peer-to-peer architecture ensures your data never touches our servers. Your conversations stay between you and your peer.</p>
+          </div>
+          <div class="landing-card">
+            <div class="card-icon">✨</div>
+            <h3>Pure Minimalism</h3>
+            <p>No clutter, no distractions. A clean interface focused entirely on your connection and conversation.</p>
+          </div>
+          <div class="landing-card">
+            <div class="card-icon">🎭</div>
+            <h3>Anonymous Concept</h3>
+            <p>No personal tracking. No intrusive profiling. Use a unique username and stay invisible to the rest of the world.</p>
+          </div>
+          <div class="landing-card">
+            <div class="card-icon">🚀</div>
+            <h3>Our Offerings</h3>
+            <p>Instant messaging, high-quality voice calls, and secure video sessions—all built into one compact platform.</p>
+          </div>
+          <div class="landing-card">
+            <div class="card-icon">⚙️</div>
+            <h3>Working Principles</h3>
+            <p>We prioritize stability and speed. Using the latest WebRTC protocols for seamless, real-time interaction.</p>
+          </div>
+          <div class="landing-card">
+            <div class="card-icon">🌑</div>
+            <h3>Dark Mode first</h3>
+            <p>Designed with a premium dark-first aesthetic that's easy on the eyes and looks stunning on any device.</p>
+          </div>
+        </div>
+      </section>
+
       <!-- AUTH -->
-      <section class="auth-view" id="authView">
+      <section class="auth-view hidden" id="authView">
         <div class="brand">
           <span class="brand-mark"></span>
           <div>
@@ -259,6 +316,6 @@
       </section>
     </main>
 
-    <script src="/app.js?v=14"></script>
+    <script src="/app.js?v=15"></script>
   </body>
 </html>
