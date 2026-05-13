@@ -733,7 +733,10 @@ async function handleApi(req, res, url) {
 }
 
 async function serveStatic(req, res, url) {
-  const requested = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
+  let requested = decodeURIComponent(url.pathname);
+  if (requested === "/" || requested === "/home" || requested === "/check-in") {
+    requested = "/index.html";
+  }
   const filePath = path.normalize(path.join(PUBLIC_DIR, requested));
   if (!filePath.startsWith(PUBLIC_DIR)) {
     res.writeHead(403);

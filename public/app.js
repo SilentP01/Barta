@@ -153,12 +153,14 @@ function showApp() {
   currentUser.textContent = `@${me.username}`;
   showSidebar();
   connectSocket();
+  if (location.pathname !== "/") history.pushState({}, "", "/");
 }
 
 function showLanding() {
   landingView.classList.remove("hidden");
   authView.classList.add("hidden");
   dashboard.classList.add("hidden");
+  if (location.pathname !== "/home") history.pushState({}, "", "/home");
 }
 
 function showSidebar() {
@@ -175,6 +177,7 @@ function showAuth() {
   landingView.classList.add("hidden");
   authView.classList.remove("hidden");
   dashboard.classList.add("hidden");
+  if (location.pathname !== "/check-in") history.pushState({}, "", "/check-in");
 }
 
 function switchAuth(mode) {
@@ -1127,23 +1130,40 @@ if (params.get("reset") === "1" && params.get("token")) {
   resetForm.elements.token.value = params.get("token");
   switchAuth("reset");
   setNotice("Create a new password.");
-  history.replaceState({}, "", "/");
+  history.replaceState({}, "", "/check-in");
 } else {
   fetch(`/api/session?_=${Date.now()}`)
     .then(async (response) => {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Not authenticated.");
       me = data.user;
+      
+      // If logged in, always go to dashboard
       showApp();
+
       if (params.get("verified") === "1") setNotice("Email verified. You are signed in.");
       if (params.get("profile") === "email-updated") setProfileNotice("Email updated.");
       if (params.toString()) history.replaceState({}, "", "/");
     })
     .catch(() => {
-      showLanding();
-      if (params.toString()) history.replaceState({}, "", "/");
+      // Not logged in: Route based on path
+      const path = location.pathname;
+      if (path === "/check-in") {
+        showAuth();
+      } else {
+        showLanding();
+      }
+      if (params.toString()) history.replaceState({}, "", path === "/check-in" ? "/check-in" : "/home");
     });
 }
+
+window.addEventListener("popstate", () => {
+  const path = location.pathname;
+  if (path === "/home") showLanding();
+  else if (path === "/check-in") showAuth();
+  else if (path === "/" && me) showApp();
+  else if (path === "/" && !me) showLanding();
+});
 
 // ─── AUTO-UPDATE CHECK ────────────────────────────────────────────────────────
 // Poll /api/version every 60 s. If the server hash changes, reload the page.
