@@ -177,7 +177,10 @@ function sendJson(res, status, data) {
   const body = JSON.stringify(data);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
-    "Content-Length": Buffer.byteLength(body)
+    "Content-Length": Buffer.byteLength(body),
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0"
   });
   res.end(body);
 }
@@ -261,7 +264,7 @@ async function getSessionUser(req) {
 async function clearSession(req, res) {
   const token = parseCookies(req)[SESSION_COOKIE];
   if (token) sessionStore.delete(hashToken(token));
-  return sendJsonWithHeaders(res, 200, { ok: true }, { "Set-Cookie": `${SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0; Secure` });
+  return sendJsonWithHeaders(res, 200, { ok: true }, { "Set-Cookie": `${SESSION_COOKIE}=; ${cookieOptions(req, 0)}` });
 }
 
 function getClientIp(req) {

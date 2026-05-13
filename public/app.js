@@ -1095,7 +1095,7 @@ if (params.get("reset") === "1" && params.get("token")) {
   setNotice("Create a new password.");
   history.replaceState({}, "", "/");
 } else {
-  fetch("/api/session")
+  fetch(`/api/session?_=${Date.now()}`)
     .then(async (response) => {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Not authenticated.");
