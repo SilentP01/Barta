@@ -893,6 +893,8 @@ logoutBtn.addEventListener("click", async () => {
   me = null;
   loginForm.reset();
   signupForm.reset();
+  loginForm.elements.identifier.readOnly = true;
+  loginForm.elements.password.readOnly = true;
   showAuth();
 });
 

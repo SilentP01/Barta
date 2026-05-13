@@ -27,12 +27,12 @@
           <form id="loginForm" class="form">
             <label>
               Username or email
-              <input name="identifier" autocomplete="username" required />
+              <input name="identifier" autocomplete="off" readonly onfocus="this.removeAttribute('readonly');" required />
             </label>
             <label>
               Password
               <div class="password-field">
-                <input name="password" type="password" autocomplete="current-password" required />
+                <input name="password" type="password" autocomplete="off" readonly onfocus="this.removeAttribute('readonly');" required />
                 <button class="ghost password-toggle" type="button" data-toggle-password>Show</button>
               </div>
             </label>
@@ -259,6 +259,6 @@
       </section>
     </main>
 
-    <script src="/app.js?v=13"></script>
+    <script src="/app.js?v=14"></script>
   </body>
 </html>
