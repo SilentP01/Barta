@@ -891,6 +891,8 @@ logoutBtn.addEventListener("click", async () => {
   if (socket) socket.close();
   await postJson("/api/logout", {}).catch(() => {});
   me = null;
+  loginForm.reset();
+  signupForm.reset();
   showAuth();
 });
 
