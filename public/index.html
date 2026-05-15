@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Barta</title>
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
   </head>
   <body>
     <main class="app">
@@ -12,7 +14,7 @@
       <section class="landing-view hidden" id="landingView">
         <header class="landing-header">
           <div class="landing-logo">
-            <span class="brand-mark sm"></span>
+            <img src="/logo.png" class="brand-mark sm" alt="Barta Logo" />
             <strong>Barta</strong>
           </div>
           <div class="landing-nav">
@@ -109,7 +111,7 @@
           Back to Home
         </button>
         <div class="brand">
-          <span class="brand-mark"></span>
+          <img src="/logo.png" class="brand-mark" alt="Barta Logo" />
           <div>
             <h1>Barta</h1>
             <p>Sign in to start a private session.</p>
@@ -208,6 +210,10 @@
       <section class="dashboard hidden" id="dashboard">
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
+          <div class="sidebar-logo">
+            <img src="/logo.png" alt="Barta" />
+            <strong>Barta</strong>
+          </div>
           <div class="account">
             <div>
               <span class="muted">Signed in</span>
@@ -357,6 +363,6 @@
       </section>
     </main>
 
-    <script src="/app.js?v=17"></script>
+    <script src="/app.js?v=18"></script>
   </body>
 </html>

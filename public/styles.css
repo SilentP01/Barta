@@ -96,7 +96,6 @@ h1, h2, p { margin: 0; }
 .brand-mark.sm {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
 }
 
 .landing-nav {
@@ -268,7 +267,7 @@ h1, h2, p { margin: 0; }
 .brand-mark {
   width: 52px; height: 52px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #0f7c86, #f2b84b);
+  object-fit: contain;
   flex: 0 0 auto;
 }
 
@@ -346,12 +345,39 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   flex-direction: column;
   background: var(--panel);
   border-right: 1px solid var(--line);
-  padding: 16px;
+  padding: 0;
   overflow: hidden;
   height: 100dvh;
 }
 
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 8px;
+}
+
+.sidebar-logo img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.sidebar-logo strong {
+  font-size: 1.2rem;
+  letter-spacing: -0.02em;
+}
+
 .account {
+  padding: 0 16px;
+  margin-bottom: 16px;
+}
+
+.sidebar > *:not(.sidebar-logo):not(.account) {
+  padding: 0 16px;
+}
   display: flex;
   align-items: center;
   gap: 8px;
