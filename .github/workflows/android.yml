@@ -16,15 +16,18 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
 
-    - name: Build with Gradle
+    - name: Setup Gradle
+      uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: 7.5
+
+    - name: Build APK
       run: |
         cd android
-        # Setup local gradle if wrapper is missing
         gradle assembleDebug --stacktrace
 
-    - name: Upload APK Artifact
+    - name: Upload APK
       uses: actions/upload-artifact@v3
       with:
         name: barta-apk
@@ -34,9 +37,9 @@ jobs:
       uses: softprops/action-gh-release@v1
       if: github.ref == 'refs/heads/main'
       with:
-        tag_name: v1.0.0
-        name: Barta Release v1.0.0
-        body: "Barta Messenger Android APK"
+        tag_name: "v1.0.${{ github.run_number }}"
+        name: "Barta App v1.0.${{ github.run_number }}"
+        body: "Barta Messenger - Native Android Build (Automated)"
         files: android/app/build/outputs/apk/debug/app-debug.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
