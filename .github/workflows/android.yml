@@ -41,7 +41,7 @@ jobs:
       with:
         tag_name: "v1.0.${{ github.run_number }}"
         name: "Barta App v1.0.${{ github.run_number }}"
-        body: "Barta Messenger - Stable Build"
+        body: "Barta Messenger - Stable Build (V30 Success)"
         files: android/app/build/outputs/apk/debug/app-debug.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
