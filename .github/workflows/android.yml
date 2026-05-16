@@ -19,7 +19,12 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Build with Gradle
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: 8.0
+
+    - name: Build APK
       run: |
         cd android
         gradle assembleDebug --stacktrace --no-daemon
@@ -36,7 +41,7 @@ jobs:
       with:
         tag_name: "v1.0.${{ github.run_number }}"
         name: "Barta App v1.0.${{ github.run_number }}"
-        body: "Barta Messenger - Clean Native Build"
+        body: "Barta Messenger - Native Android Build (V8 Engine)"
         files: android/app/build/outputs/apk/debug/app-debug.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
