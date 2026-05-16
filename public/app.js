@@ -4,6 +4,7 @@ const landingSignupBtn = document.querySelector("#landingSignupBtn");
 const getStartedBtn = document.querySelector("#getStartedBtn");
 const backToHomeBtn = document.querySelector("#backToHomeBtn");
 const authView = document.querySelector("#authView");
+const privacyOverlay = document.querySelector("#privacyOverlay");
 const dashboard = document.querySelector("#dashboard");
 const loginTab = document.querySelector("#loginTab");
 const signupTab = document.querySelector("#signupTab");
@@ -1121,6 +1122,29 @@ getStartedBtn.addEventListener("click", () => {
 });
 
 backToHomeBtn.addEventListener("click", showLanding);
+
+
+// ─── PRIVACY GUARD ────────────────────────────────────────────────────────────
+// Deter screenshots and screen recording by hiding content when tab is inactive.
+function togglePrivacy(hide) {
+  if (hide) privacyOverlay.classList.remove("hidden");
+  else privacyOverlay.classList.add("hidden");
+}
+
+document.addEventListener("visibilitychange", () => {
+  togglePrivacy(document.visibilityState === "hidden");
+});
+
+window.addEventListener("blur", () => togglePrivacy(true));
+window.addEventListener("focus", () => togglePrivacy(false));
+
+// Deter PrintScreen key (some browsers support this)
+window.addEventListener("keyup", (e) => {
+  if (e.key === "PrintScreen") {
+    navigator.clipboard.writeText(""); // Clear clipboard
+    alert("Screenshots are discouraged for privacy reasons.");
+  }
+});
 
 
 const params = new URLSearchParams(location.search);
