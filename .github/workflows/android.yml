@@ -22,10 +22,12 @@ jobs:
     - name: Generate Wrapper and Clean Build
       run: |
         cd android
+        # First, ensure we have a wrapper using the system's gradle
         gradle wrapper --gradle-version 8.0.2
         chmod +x gradlew
+        # Now use the wrapper for consistency and debug info
         ./gradlew clean
-        ./gradlew assembleDebug --stacktrace
+        ./gradlew assembleDebug --stacktrace --info
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
@@ -39,7 +41,7 @@ jobs:
       with:
         tag_name: "v1.0.${{ github.run_number }}"
         name: "Barta App v1.0.${{ github.run_number }}"
-        body: "Barta Messenger - Modern Plugins DSL Build"
+        body: "Barta Messenger - Diagnostic Build (Verbose Info)"
         files: android/app/build/outputs/apk/debug/app-debug.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
