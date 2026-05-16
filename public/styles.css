@@ -104,9 +104,29 @@ h1, h2, p { margin: 0; }
   letter-spacing: -0.02em;
 }
 
-.landing-nav {
-  display: flex;
-  gap: 12px;
+.nav-link {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-right: 8px;
+}
+.nav-link:hover { color: var(--accent); }
+
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  background: transparent;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-weight: 700;
+  transition: all 0.2s;
+}
+.btn-outline:hover {
+  background: var(--accent);
+  color: #fff;
 }
 
 .landing-hero {
