@@ -1140,11 +1140,22 @@ window.addEventListener("focus", () => togglePrivacy(false));
 
 // Deter PrintScreen key (some browsers support this)
 window.addEventListener("keyup", (e) => {
-  if (e.key === "PrintScreen") {
+  if (e.key === "PrintScreen" || e.code === "PrintScreen") {
     navigator.clipboard.writeText(""); // Clear clipboard
-    alert("Screenshots are discouraged for privacy reasons.");
+    togglePrivacy(true); // Force black screen immediately
+    setTimeout(() => togglePrivacy(false), 2000);
+    alert("Barta: Screen capture is prohibited for security reasons.");
   }
 });
+
+// Block right-click context menu globally
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+// Advanced Deterrent: Detect if user starts a screen share
+if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+  // We can't prevent it easily, but we can warn the user.
+  // Note: This requires a user gesture to start, so we just stick to the basic deterrents.
+}
 
 
 const params = new URLSearchParams(location.search);

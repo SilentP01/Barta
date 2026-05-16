@@ -930,14 +930,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .privacy-overlay {
   position: fixed;
   inset: 0;
-  background: var(--bg);
+  background: #000000; /* Solid Black like Netflix */
   z-index: 99999;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
 }
 
 .privacy-content {
@@ -946,23 +944,60 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   align-items: center;
   gap: 20px;
   animation: privacyFadeIn 0.3s ease;
+  color: #ffffff;
 }
 
 .privacy-content img {
   width: 120px;
   height: 120px;
   object-fit: contain;
+  filter: drop-shadow(0 0 20px rgba(255,255,255,0.2));
 }
 
 .privacy-content h2 {
   font-size: 2.4rem;
   font-weight: 800;
   letter-spacing: -0.04em;
+  color: #ffffff;
 }
 
 .privacy-content p {
-  color: var(--muted);
+  color: #888888;
   font-size: 1.1rem;
+}
+
+/* Landing Page Preview styles */
+.protected-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: #111;
+  border-radius: 24px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.black-screen {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0.95;
+}
+
+.mini-logo {
+  width: 60px;
+  height: 60px;
+  z-index: 1;
+}
+
+.lock-icon {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  font-size: 1.5rem;
+  z-index: 1;
 }
 
 @keyframes privacyFadeIn {
