@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-# Minimal gradlew script to trigger build in GitHub Actions
-exec ./gradle/wrapper/gradle-wrapper.jar "$@"

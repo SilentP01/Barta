@@ -19,15 +19,10 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Setup Gradle
-      uses: gradle/gradle-build-action@v2
-      with:
-        gradle-version: 7.5
-
-    - name: Build APK
+    - name: Build with Gradle
       run: |
         cd android
-        gradle assembleDebug --stacktrace
+        gradle assembleDebug --stacktrace --no-daemon
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
@@ -41,7 +36,7 @@ jobs:
       with:
         tag_name: "v1.0.${{ github.run_number }}"
         name: "Barta App v1.0.${{ github.run_number }}"
-        body: "Barta Messenger - Native Android Build (Automated Success)"
+        body: "Barta Messenger - Clean Native Build"
         files: android/app/build/outputs/apk/debug/app-debug.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
