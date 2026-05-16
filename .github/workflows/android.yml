@@ -19,13 +19,12 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Generate Gradle Wrapper and Build APK
+    - name: Generate Wrapper and Clean Build
       run: |
         cd android
-        # GitHub's ubuntu-latest has gradle pre-installed.
-        # We use it to generate the wrapper jar which is missing in the repo.
         gradle wrapper --gradle-version 8.0.2
         chmod +x gradlew
+        ./gradlew clean
         ./gradlew assembleDebug --stacktrace
 
     - name: Upload APK
@@ -40,7 +39,7 @@ jobs:
       with:
         tag_name: "v1.0.${{ github.run_number }}"
         name: "Barta App v1.0.${{ github.run_number }}"
-        body: "Barta Messenger - Stable Build (Auto-Generated Wrapper Success)"
+        body: "Barta Messenger - Modern Plugins DSL Build"
         files: android/app/build/outputs/apk/debug/app-debug.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
