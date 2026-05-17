@@ -29,7 +29,10 @@ jobs:
     - name: Build with Gradle
       run: |
         cd android
-        gradle assembleRelease
+        # Fix missing gradle-wrapper.jar by regenerating it
+        gradle wrapper
+        chmod +x gradlew
+        ./gradlew assembleRelease
 
     - name: Create Release
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
