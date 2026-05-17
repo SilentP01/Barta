@@ -414,23 +414,72 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .account {
-  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
   margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
 }
 
 .sidebar > *:not(.sidebar-logo):not(.account) {
   padding: 0 16px;
 }
+
+.account > div {
+  flex: 1;
+  min-width: 0;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  justify-content: center;
 }
 
-.account > div { flex: 1; min-width: 0; }
+.account > div strong {
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-.muted { display: block; color: var(--muted); font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+.account .muted {
+  display: block;
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  white-space: nowrap;
+}
+
+.account .theme-toggle {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  font-size: 0.9rem !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50% !important;
+  flex-shrink: 0;
+}
+
+.account .ghost {
+  min-height: 28px !important;
+  height: 28px !important;
+  padding: 0 8px !important;
+  font-size: 0.78rem !important;
+  border-radius: 6px !important;
+  font-weight: 700 !important;
+  flex-shrink: 0;
+  background: rgba(128, 128, 128, 0.1) !important;
+}
+
+.account .ghost:hover {
+  background: rgba(128, 128, 128, 0.2) !important;
+}
 
 .profile-panel {
   border: 1px solid var(--line); border-radius: 10px;
