@@ -1,9 +1,0 @@
-app.barta.messenger.app-pngs-0 C:\Projects\android\app\build\generated\res\pngs\release
-app.barta.messenger.app-resValues-1 C:\Projects\android\app\build\generated\res\resValues\release
-app.barta.messenger.app-updated_navigation_xml-2 C:\Projects\android\app\build\generated\updated_navigation_xml\release
-app.barta.messenger.app-packageReleaseResources-3 C:\Projects\android\app\build\intermediates\incremental\release\packageReleaseResources\merged.dir
-app.barta.messenger.app-packageReleaseResources-4 C:\Projects\android\app\build\intermediates\incremental\release\packageReleaseResources\stripped.dir
-app.barta.messenger.app-release-5 C:\Projects\android\app\build\intermediates\merged_res\release\mergeReleaseResources
-app.barta.messenger.app-main-6 C:\Projects\android\app\src\main\res
-app.barta.messenger.app-release-7 C:\Projects\android\app\src\release\res
-gradleHome-0 C:\Users\debaj\.gradle
