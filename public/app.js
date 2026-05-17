@@ -309,6 +309,13 @@ function setComposerReady(isReady) {
 }
 
 function connectSocket() {
+  const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const isNativeBarta = navigator.userAgent.includes("BartaNativeAndroid");
+  if (isMobileDevice && !isNativeBarta) {
+    document.documentElement.classList.add("mobile-locked");
+    return;
+  }
+
   if (socket) socket.close();
 
   socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`);
@@ -482,6 +489,14 @@ function setupChannel() {
 }
 
 async function startCall(withVideo = true) {
+  // Mobile browser restriction check to prevent screenshots
+  const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const isNativeBarta = navigator.userAgent.includes("BartaNativeAndroid");
+  if (isMobileDevice && !isNativeBarta) {
+    alert("Private connection cannot be created into a standard phone browser");
+    return;
+  }
+
   if (!peer || !currentPeer || localStream) return;
   // Send a call request to peer — they must accept before media starts
   const kind = withVideo ? "video-request" : "audio-request";
@@ -724,6 +739,13 @@ function receiveData(data) {
 
     // Incoming call requests — show accept/reject popup
     if (packet.kind === "video-request" || packet.kind === "audio-request") {
+      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isNativeBarta = navigator.userAgent.includes("BartaNativeAndroid");
+      if (isMobileDevice && !isNativeBarta) {
+        sendData(JSON.stringify({ kind: "call-rejected" }));
+        alert("Private connection cannot be created into a standard phone browser");
+        return;
+      }
       showCallRequestPopup(packet.kind);
       return;
     }

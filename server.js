@@ -916,6 +916,16 @@ function readFrame(buffer) {
 }
 
 async function acceptWebSocket(req, socket) {
+  // Mobile browser restriction check to prevent screenshots
+  const userAgent = req.headers["user-agent"] || "";
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  const isNative = userAgent.includes("BartaNativeAndroid");
+  if (isMobile && !isNative) {
+    socket.write("HTTP/1.1 403 Forbidden\r\n\r\nPrivate connection cannot be created into a standard phone browser\r\n\r\n");
+    socket.destroy();
+    return;
+  }
+
   if (rateLimit(req, "websocket")) {
     socket.write("HTTP/1.1 429 Too Many Requests\r\n\r\n");
     socket.destroy();

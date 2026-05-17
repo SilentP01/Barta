@@ -6,4 +6,7 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="icon_background">#000000</color>
+    <color name="logo_start">#00C6FF</color>
+    <color name="logo_end">#D500F9</color>
 </resources>
