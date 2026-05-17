@@ -49,6 +49,7 @@ const mimeTypes = {
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".png": "image/png",
+  ".ico": "image/x-icon",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".svg": "image/svg+xml"
@@ -155,7 +156,7 @@ function normalizeEmail(email) {
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
   return new Promise((resolve, reject) => {
-    crypto.scrypt(String(password), salt, 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (err, derivedKey) => {
+    crypto.scrypt(String(password), salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (err, derivedKey) => {
       if (err) return reject(err);
       resolve(`scrypt$${salt}$${derivedKey.toString("hex")}`);
     });
@@ -166,7 +167,7 @@ function verifyPassword(password, passwordHash) {
   return new Promise((resolve, reject) => {
     const [scheme, salt, hash] = String(passwordHash).split("$");
     if (scheme !== "scrypt" || !salt || !hash) return resolve(false);
-    crypto.scrypt(String(password), salt, 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (err, submitted) => {
+    crypto.scrypt(String(password), salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (err, submitted) => {
       if (err) return reject(err);
       const stored = Buffer.from(hash, "hex");
       resolve(stored.length === submitted.length && crypto.timingSafeEqual(stored, submitted));
