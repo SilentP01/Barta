@@ -1231,3 +1231,8 @@ html.pip-active #localVideo {
   z-index: 10 !important;
   object-fit: cover !important;
 }
+
+/* Hide back to landing links when running inside the native APK context */
+html.native-app #backToHomeBtn {
+  display: none !important;
+}

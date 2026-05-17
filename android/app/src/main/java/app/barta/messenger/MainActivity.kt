@@ -98,6 +98,80 @@ class MainActivity : AppCompatActivity() {
                     true
                 }
             }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                super.onReceivedError(view, request, error)
+                if (request?.isForMainFrame == true) {
+                    val offlineHtml = """
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                          <style>
+                            body {
+                              background: #0f1117;
+                              color: #ffffff;
+                              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                              display: flex;
+                              flex-direction: column;
+                              align-items: center;
+                              justify-content: center;
+                              height: 100vh;
+                              margin: 0;
+                              text-align: center;
+                              padding: 24px;
+                              box-sizing: border-box;
+                            }
+                            .icon {
+                              font-size: 3rem;
+                              margin-bottom: 16px;
+                              animation: pulse 2s infinite ease-in-out;
+                            }
+                            h1 {
+                              font-size: 1.5rem;
+                              font-weight: 700;
+                              margin: 0 0 10px 0;
+                              letter-spacing: -0.02em;
+                            }
+                            p {
+                              font-size: 0.95rem;
+                              color: #94a3b8;
+                              margin: 0 0 28px 0;
+                              line-height: 1.6;
+                              max-width: 320px;
+                            }
+                            .btn {
+                              background: #14b8a6;
+                              color: #ffffff;
+                              border: none;
+                              padding: 14px 28px;
+                              border-radius: 999px;
+                              font-weight: 700;
+                              font-size: 0.9rem;
+                              cursor: pointer;
+                              box-shadow: 0 4px 14px rgba(20, 184, 166, 0.35);
+                            }
+                            @keyframes pulse {
+                              0%, 100% { opacity: 0.5; }
+                              50% { opacity: 1; }
+                            }
+                          </style>
+                        </head>
+                        <body>
+                          <div class="icon">📡</div>
+                          <h1>Connection Unavailable</h1>
+                          <p>Barta requires an active network to authenticate and secure your private sessions. Please check your cellular data or Wi-Fi settings.</p>
+                          <button class="btn" onclick="location.href='$baseUrl'">Retry Connection</button>
+                        </body>
+                        </html>
+                    """.trimIndent()
+                    view?.loadDataWithBaseURL(null, offlineHtml, "text/html", "UTF-8", null)
+                }
+            }
         }
 
         webView.webChromeClient = object : WebChromeClient() {

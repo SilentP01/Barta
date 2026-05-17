@@ -77,6 +77,10 @@ const refreshBtn = document.querySelector("#refreshBtn");
 const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const isNativeBarta = navigator.userAgent.includes("BartaNativeAndroid");
 
+if (isNativeBarta) {
+  document.documentElement.classList.add("native-app");
+}
+
 function showPrivacyWarningToast() {
   const existing = document.querySelector(".privacy-toast");
   if (existing) existing.remove();
@@ -98,6 +102,13 @@ function showPrivacyWarningToast() {
     toast.classList.add("fade-out");
     setTimeout(() => toast.remove(), 400);
   }, 5000);
+
+  // Redirect standard phone browser back to dashboard sidebar
+  if (isMobileDevice && !isNativeBarta) {
+    searchResult.textContent = "";
+    searchForm.reset();
+    showSidebar();
+  }
 }
 
 window.onPipModeChanged = function(isInPip) {
@@ -192,6 +203,11 @@ function showApp() {
 }
 
 function showLanding() {
+  if (isNativeBarta) {
+    showAuth();
+    switchAuth("login");
+    return;
+  }
   landingView.classList.remove("hidden");
   authView.classList.add("hidden");
   dashboard.classList.add("hidden");
