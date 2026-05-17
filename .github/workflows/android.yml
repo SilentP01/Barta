@@ -28,11 +28,14 @@ jobs:
     - name: Build APK
       run: |
         cd android
-        # Build the release APK
-        gradle assembleRelease --stacktrace
-        # Rename the APK to Barta.apk so the download link is consistent
+        # Use system gradle to avoid missing wrapper jar issues
+        gradle clean assembleRelease --stacktrace
+        
+        # Ensure release directory exists
         mkdir -p ../release
-        mv app/build/outputs/apk/release/app-release.apk ../release/Barta.apk
+        
+        # Find the generated APK and move/rename it
+        find app/build/outputs/apk/release -name "*.apk" -exec mv {} ../release/Barta.apk \;
 
     - name: Create Release
       if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -41,7 +44,7 @@ jobs:
         artifacts: "release/Barta.apk"
         tag: "latest"
         name: "Barta Latest Release"
-        body: "Automated build from GitHub Actions. Download Barta.apk below."
+        body: "Automated build from GitHub Actions. Your permanent download link is: https://github.com/${{ github.repository }}/releases/latest/download/Barta.apk"
         token: ${{ secrets.GITHUB_TOKEN }}
         allowUpdates: true
         removeArtifacts: true
