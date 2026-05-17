@@ -17,6 +17,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private val baseUrl = "https://barta.up.railway.app/"
+    var isCallActive = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,7 +36,32 @@ class MainActivity : AppCompatActivity() {
         checkForUpdates()
     }
 
+    class BartaBridge(val activity: MainActivity) {
+        @android.webkit.JavascriptInterface
+        fun setCallActive(isActive: Boolean) {
+            activity.runOnUiThread {
+                activity.isCallActive = isActive
+            }
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (isCallActive) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                val params = android.app.PictureInPictureParams.Builder().build()
+                enterPictureInPictureMode(params)
+            } else {
+                @Suppress("DEPRECATION")
+                enterPictureInPictureMode()
+            }
+        }
+    }
+
     private fun setupWebView() {
+        val defaultUserAgent = webView.settings.userAgentString ?: ""
+        webView.settings.userAgentString = "$defaultUserAgent BartaNativeAndroid"
+
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -47,6 +73,8 @@ class MainActivity : AppCompatActivity() {
             setSupportMultipleWindows(true)
             javaScriptCanOpenWindowsAutomatically = true
         }
+
+        webView.addJavascriptInterface(BartaBridge(this), "BartaBridge")
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {

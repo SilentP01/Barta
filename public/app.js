@@ -498,6 +498,9 @@ async function _actuallyStartCall(withVideo = true) {
     localStream = await navigator.mediaDevices.getUserMedia(
       withVideo ? { video: true, audio: true } : { video: false, audio: true }
     );
+    if (window.BartaBridge) {
+      window.BartaBridge.setCallActive(true);
+    }
     if (withVideo) {
       localVideo.srcObject = localStream;
       remoteVideo.srcObject = remoteStream || null;
@@ -553,6 +556,9 @@ function startAudioCall() { return startCall(false); }
 
 // Shared local teardown used by both sides when a call ends
 function _cleanupCallUI() {
+  if (window.BartaBridge) {
+    window.BartaBridge.setCallActive(false);
+  }
   exitFullscreen();
   videoCall.classList.add("hidden");
   if (localStream) {

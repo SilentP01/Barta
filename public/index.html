@@ -10,8 +10,28 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0f1117" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <script>
+      (function() {
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const isNative = navigator.userAgent.includes("BartaNativeAndroid");
+        if (isMobile && !isNative) {
+          document.documentElement.classList.add("mobile-locked");
+        }
+      })();
+    </script>
   </head>
   <body>
+    <!-- MOBILE ACCESSIBILITY SECURITY BLOCKER -->
+    <div id="mobileBlocker" class="mobile-blocker">
+      <div class="blocker-content">
+        <img src="/logo.png" class="blocker-logo" alt="Barta" />
+        <h2>Privacy Guard Active</h2>
+        <p>For your ultimate security, Barta mobile web access is disabled. Mobile browsers do not support hardware-level screenshot and screen-recording prevention.</p>
+        <p class="highlight">Please use a desktop computer or install our secure Android app to continue.</p>
+        <a href="https://github.com/SilentP01/Barta/releases/latest/download/Barta.apk" class="primary btn-lg blocker-btn">Download Barta APK</a>
+      </div>
+    </div>
+
     <main class="app">
       <!-- LANDING PAGE -->
       <section class="landing-view hidden" id="landingView">
