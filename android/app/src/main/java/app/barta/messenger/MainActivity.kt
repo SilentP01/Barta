@@ -235,7 +235,7 @@ class MainActivity : AppCompatActivity() {
             .setCancelable(true)
             .setPositiveButton("Update Now") { _, _ ->
                 val updateUrl = "https://github.com/SilentP01/Barta/releases/latest/download/Barta.apk"
-                startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, androidx.core.net.toUri(updateUrl)))
+                startActivity(Intent(Intent.ACTION_VIEW, updateUrl.toUri()))
             }
             .setNegativeButton("Later") { dialog, _ ->
                 dialog.dismiss()
