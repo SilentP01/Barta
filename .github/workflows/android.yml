@@ -1,8 +1,8 @@
-name: Build Android APK
+name: Android CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -10,42 +10,39 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Set up JDK 17
+
+    - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
-        java-version: '17'
+        java-version: '21'
         distribution: 'temurin'
-        cache: gradle
 
-    - name: Clean Build (Strict Gradle 8.7)
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: 9.5.1
+
+    - name: Build APK
       run: |
         cd android
-        gradle wrapper --gradle-version 8.7
-        chmod +x gradlew
-        ./gradlew assembleDebug --stacktrace --warning-mode all
-
-    - name: Prepare APK for Release
-      run: |
-        mkdir -p release
-        cp android/app/build/outputs/apk/debug/app-debug.apk release/Barta.apk
-
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: barta-apk
-        path: release/Barta.apk
+        # Build the release APK
+        gradle assembleRelease --stacktrace
+        # Rename the APK to Barta.apk so the download link is consistent
+        mkdir -p ../release
+        mv app/build/outputs/apk/release/app-release.apk ../release/Barta.apk
 
     - name: Create Release
-      uses: softprops/action-gh-release@v2
-      if: github.ref == 'refs/heads/main'
+      if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+      uses: ncipollo/release-action@v1
       with:
-        tag_name: "v21.0.${{ github.run_number }}"
-        name: "Barta App v21.0.${{ github.run_number }}"
-        body: "Barta P2P Messenger - Official Mobile Release"
-        files: release/Barta.apk
-        overwrite: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        artifacts: "release/Barta.apk"
+        tag: "latest"
+        name: "Barta Latest Release"
+        body: "Automated build from GitHub Actions. Download Barta.apk below."
+        token: ${{ secrets.GITHUB_TOKEN }}
+        allowUpdates: true
+        removeArtifacts: true
+        replacesArtifacts: true
