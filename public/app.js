@@ -89,10 +89,10 @@ function showPrivacyWarningToast() {
   toast.className = "privacy-toast";
   toast.innerHTML = `
     <div class="toast-content">
-      <span class="toast-icon">🔒</span>
+      <span class="toast-icon">⚠️</span>
       <div class="toast-body">
-        <strong>Security Alert</strong>
-        <p>Private connection cannot be created into a standard phone browser. Standard phone browsers lack screenshot and screen recording protection.</p>
+        <strong>Privacy Warning</strong>
+        <p>Standard mobile browsers allow screenshot and screen recording capture. To ensure complete privacy and secure screenshot blocking, please install our secure Android App.</p>
       </div>
     </div>
   `;
@@ -102,13 +102,6 @@ function showPrivacyWarningToast() {
     toast.classList.add("fade-out");
     setTimeout(() => toast.remove(), 400);
   }, 5000);
-
-  // Redirect standard phone browser back to dashboard sidebar
-  if (isMobileDevice && !isNativeBarta) {
-    searchResult.textContent = "";
-    searchForm.reset();
-    showSidebar();
-  }
 }
 
 window.onPipModeChanged = function(isInPip) {
@@ -268,7 +261,6 @@ function renderUsers(users = []) {
       button.addEventListener("click", () => {
         if (isMobileDevice && !isNativeBarta) {
           showPrivacyWarningToast();
-          return;
         }
         sendSocket("request", { to: user.id });
       });
@@ -302,7 +294,6 @@ function renderRequest(from) {
   accept.addEventListener("click", () => {
     if (isMobileDevice && !isNativeBarta) {
       showPrivacyWarningToast();
-      return;
     }
     sendSocket("respond-request", { accept: true });
     requests.innerHTML = "";
@@ -544,7 +535,6 @@ function setupChannel() {
 async function startCall(withVideo = true) {
   if (isMobileDevice && !isNativeBarta) {
     showPrivacyWarningToast();
-    return;
   }
 
   if (!peer || !currentPeer || localStream) return;
@@ -790,9 +780,7 @@ function receiveData(data) {
     // Incoming call requests — show accept/reject popup
     if (packet.kind === "video-request" || packet.kind === "audio-request") {
       if (isMobileDevice && !isNativeBarta) {
-        sendData(JSON.stringify({ kind: "call-rejected" }));
         showPrivacyWarningToast();
-        return;
       }
       showCallRequestPopup(packet.kind);
       return;
@@ -1096,7 +1084,6 @@ searchForm.addEventListener("submit", async (event) => {
       button.addEventListener("click", () => {
         if (isMobileDevice && !isNativeBarta) {
           showPrivacyWarningToast();
-          return;
         }
         sendSocket("request", { to: user.id });
       });
