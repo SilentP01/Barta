@@ -23,25 +23,29 @@ jobs:
     - name: Clean Build (Strict Gradle 8.7)
       run: |
         cd android
-        # We manually hardcoded the wrapper to 8.7 in the repo.
-        # Now we just use the system gradle to ENSURE the wrapper is generated correctly for the build.
         gradle wrapper --gradle-version 8.7
         chmod +x gradlew
         ./gradlew assembleDebug --stacktrace --warning-mode all
 
-    - name: Upload APK
+    - name: Prepare APK for Release
+      run: |
+        mkdir -p release
+        cp android/app/build/outputs/apk/debug/app-debug.apk release/Barta_V-21.0.0.1.apk
+
+    - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: barta-apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        path: release/Barta_V-21.0.0.1.apk
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
       if: github.ref == 'refs/heads/main'
       with:
-        tag_name: "v1.0.${{ github.run_number }}"
-        name: "Barta App v1.0.${{ github.run_number }}"
-        body: "Barta Messenger - FINAL STABLE RELEASE (Gradle 8.7 Fix)"
-        files: android/app/build/outputs/apk/debug/app-debug.apk
+        tag_name: "v21.0.0.1"
+        name: "Barta Release v21.0.0.1"
+        body: "Barta P2P Messenger - Official Mobile Release v21.0.0.1"
+        files: release/Barta_V-21.0.0.1.apk
+        overwrite: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

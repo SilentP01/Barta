@@ -3,23 +3,20 @@ package app.barta.messenger
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Bundle
 import android.view.WindowManager
 import android.webkit.*
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import org.json.JSONObject
+import androidx.core.net.toUri
 import java.net.URL
 import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private val APP_VERSION = "v22" // Matches current web version
-    private val BASE_URL = "https://barta.up.railway.app/"
+    private val baseUrl = "https://barta.up.railway.app/"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,7 +24,7 @@ class MainActivity : AppCompatActivity() {
         // NATIVE PRIVACY: This blocks screenshots and screen recording globally in the app
         window.setFlags(
             WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE
+            WindowManager.LayoutParams.FLAG_SECURE,
         )
 
         webView = WebView(this)
@@ -54,11 +51,11 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val url = request.url.toString()
-                return if (url.startsWith(BASE_URL)) {
+                return if (url.startsWith(baseUrl)) {
                     false
                 } else {
                     // Open external links in browser
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
                     true
                 }
             }
@@ -73,14 +70,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        webView.loadUrl(BASE_URL)
+        webView.loadUrl(baseUrl)
     }
 
     private fun checkPermissions() {
         val permissions = arrayOf(
             Manifest.permission.CAMERA,
             Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.MODIFY_AUDIO_SETTINGS
+            Manifest.permission.MODIFY_AUDIO_SETTINGS,
         )
         val missingPermissions = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
@@ -93,9 +90,7 @@ class MainActivity : AppCompatActivity() {
     private fun checkForUpdates() {
         thread {
             try {
-                val response = URL("${BASE_URL}api/version").readText()
-                val json = JSONObject(response)
-                val serverId = json.optString("SERVER_RUN_ID", "")
+                URL("${baseUrl}api/version").readText()
                 
                 // In a real scenario, you'd compare a numeric version code.
                 // For now, we alert if the server hash is different from a cached one.
