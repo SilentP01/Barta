@@ -412,14 +412,6 @@ function readBody(req) {
 
 async function handleApi(req, res, url) {
   try {
-    // Enforce standard mobile browser block at the API layer (Netflix-style restriction)
-    const userAgent = req.headers["user-agent"] || "";
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-    const isNative = userAgent.includes("BartaNativeAndroid");
-    if (isMobile && !isNative && url.pathname.startsWith("/api/") && url.pathname !== "/api/health" && url.pathname !== "/api/version") {
-      return sendError(res, 403, "Private connection cannot be created into a standard phone browser. Please use the Barta APK.");
-    }
-
     if (req.method === "GET" && url.pathname === "/api/health") {
       return sendJson(res, 200, { ok: true, app: "Barta" });
     }
@@ -924,16 +916,6 @@ function readFrame(buffer) {
 }
 
 async function acceptWebSocket(req, socket) {
-  // Mobile browser restriction check to prevent screenshots
-  const userAgent = req.headers["user-agent"] || "";
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-  const isNative = userAgent.includes("BartaNativeAndroid");
-  if (isMobile && !isNative) {
-    socket.write("HTTP/1.1 403 Forbidden\r\n\r\nPrivate connection cannot be created into a standard phone browser\r\n\r\n");
-    socket.destroy();
-    return;
-  }
-
   if (rateLimit(req, "websocket")) {
     socket.write("HTTP/1.1 429 Too Many Requests\r\n\r\n");
     socket.destroy();

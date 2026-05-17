@@ -49,13 +49,24 @@ class MainActivity : AppCompatActivity() {
         super.onUserLeaveHint()
         if (isCallActive) {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                val params = android.app.PictureInPictureParams.Builder().build()
+                val rational = android.util.Rational(9, 16)
+                val params = android.app.PictureInPictureParams.Builder()
+                    .setAspectRatio(rational)
+                    .build()
                 enterPictureInPictureMode(params)
             } else {
                 @Suppress("DEPRECATION")
                 enterPictureInPictureMode()
             }
         }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: android.content.res.Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        webView.evaluateJavascript("javascript:if(window.onPipModeChanged){window.onPipModeChanged($isInPictureInPictureMode);}", null)
     }
 
     private fun setupWebView() {

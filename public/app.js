@@ -74,6 +74,40 @@ const themeToggle = document.querySelector("#themeToggle");
 const themeIcon = document.querySelector("#themeIcon");
 const refreshBtn = document.querySelector("#refreshBtn");
 
+const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+const isNativeBarta = navigator.userAgent.includes("BartaNativeAndroid");
+
+function showPrivacyWarningToast() {
+  const existing = document.querySelector(".privacy-toast");
+  if (existing) existing.remove();
+
+  const toast = document.createElement("div");
+  toast.className = "privacy-toast";
+  toast.innerHTML = `
+    <div class="toast-content">
+      <span class="toast-icon">🔒</span>
+      <div class="toast-body">
+        <strong>Security Alert</strong>
+        <p>Private connection cannot be created into a standard phone browser. Standard phone browsers lack screenshot and screen recording protection.</p>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.classList.add("fade-out");
+    setTimeout(() => toast.remove(), 400);
+  }, 5000);
+}
+
+window.onPipModeChanged = function(isInPip) {
+  if (isInPip) {
+    document.documentElement.classList.add("pip-active");
+  } else {
+    document.documentElement.classList.remove("pip-active");
+  }
+};
+
 let pendingCallKind = null; // 'video-request' | 'audio-request' — set on receiver side
 
 let me = null;
@@ -215,7 +249,13 @@ function renderUsers(users = []) {
       const button = document.createElement("button");
       button.className = "secondary";
       button.textContent = "Request";
-      button.addEventListener("click", () => sendSocket("request", { to: user.id }));
+      button.addEventListener("click", () => {
+        if (isMobileDevice && !isNativeBarta) {
+          showPrivacyWarningToast();
+          return;
+        }
+        sendSocket("request", { to: user.id });
+      });
       row.appendChild(button);
     }
     userList.appendChild(row);
@@ -244,6 +284,10 @@ function renderRequest(from) {
   accept.className = "primary";
   accept.textContent = "Accept";
   accept.addEventListener("click", () => {
+    if (isMobileDevice && !isNativeBarta) {
+      showPrivacyWarningToast();
+      return;
+    }
     sendSocket("respond-request", { accept: true });
     requests.innerHTML = "";
     mobileRequestBanner.classList.add("hidden");
@@ -309,13 +353,6 @@ function setComposerReady(isReady) {
 }
 
 function connectSocket() {
-  const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  const isNativeBarta = navigator.userAgent.includes("BartaNativeAndroid");
-  if (isMobileDevice && !isNativeBarta) {
-    document.documentElement.classList.add("mobile-locked");
-    return;
-  }
-
   if (socket) socket.close();
 
   socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`);
@@ -489,11 +526,8 @@ function setupChannel() {
 }
 
 async function startCall(withVideo = true) {
-  // Mobile browser restriction check to prevent screenshots
-  const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  const isNativeBarta = navigator.userAgent.includes("BartaNativeAndroid");
   if (isMobileDevice && !isNativeBarta) {
-    alert("Private connection cannot be created into a standard phone browser");
+    showPrivacyWarningToast();
     return;
   }
 
@@ -739,11 +773,9 @@ function receiveData(data) {
 
     // Incoming call requests — show accept/reject popup
     if (packet.kind === "video-request" || packet.kind === "audio-request") {
-      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      const isNativeBarta = navigator.userAgent.includes("BartaNativeAndroid");
       if (isMobileDevice && !isNativeBarta) {
         sendData(JSON.stringify({ kind: "call-rejected" }));
-        alert("Private connection cannot be created into a standard phone browser");
+        showPrivacyWarningToast();
         return;
       }
       showCallRequestPopup(packet.kind);
@@ -1045,7 +1077,13 @@ searchForm.addEventListener("submit", async (event) => {
       const button = document.createElement("button");
       button.className = "secondary";
       button.textContent = "Request";
-      button.addEventListener("click", () => sendSocket("request", { to: user.id }));
+      button.addEventListener("click", () => {
+        if (isMobileDevice && !isNativeBarta) {
+          showPrivacyWarningToast();
+          return;
+        }
+        sendSocket("request", { to: user.id });
+      });
       searchResult.querySelector(".user-row").appendChild(button);
     }
   } catch (error) {
