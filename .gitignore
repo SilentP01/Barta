@@ -8,3 +8,18 @@ server.log
 server.err
 tmp-*.log
 
+# Android build and local files ignore rules
+.gradle/
+.idea/
+.kotlin/
+build/
+app/build/
+*.iml
+local.properties
+.cxx/
+capture.png
+**/build/
+**/.gradle/
+**/.idea/
+**/.kotlin/
+**/local.properties
