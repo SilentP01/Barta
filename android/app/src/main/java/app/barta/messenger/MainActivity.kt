@@ -203,15 +203,44 @@ class MainActivity : AppCompatActivity() {
     private fun checkForUpdates() {
         thread {
             try {
-                URL("${baseUrl}api/version").readText()
-                
-                // In a real scenario, you'd compare a numeric version code.
-                // For now, we alert if the server hash is different from a cached one.
-                // Or simply check if a new update is available.
+                val response = java.net.URL("${baseUrl}api/version").readText()
+                val json = org.json.JSONObject(response)
+                val serverVersionCode = json.optInt("latestVersionCode", 1)
+
+                val pInfo = packageManager.getPackageInfo(packageName, 0)
+                val localVersionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    pInfo.longVersionCode
+                } else {
+                    @Suppress("DEPRECATION")
+                    pInfo.versionCode.toLong()
+                }
+
+                if (serverVersionCode > localVersionCode) {
+                    runOnUiThread {
+                        showUpdateDialog()
+                    }
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
+    }
+
+    private fun showUpdateDialog() {
+        if (isDestroyed || isFinishing) return
+
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Update Available")
+            .setMessage("A new, secure version of Barta is available. To ensure the highest level of privacy protection and optimal performance, please update your application.")
+            .setCancelable(true)
+            .setPositiveButton("Update Now") { _, _ ->
+                val updateUrl = "https://github.com/SilentP01/Barta/releases/latest/download/Barta.apk"
+                startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, androidx.core.net.toUri(updateUrl)))
+            }
+            .setNegativeButton("Later") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .show()
     }
 
     override fun onBackPressed() {

@@ -24,6 +24,7 @@ const MAGIC_LINK_TTL_MS = 10 * 60 * 1000;
 const MAX_ONLINE_USERS = Number(process.env.MAX_ONLINE_USERS || 250);
 const ADMIN_SECRET = process.env.ADMIN_SECRET || "";
 const SERVER_RUN_ID = crypto.randomBytes(8).toString("hex");
+const LATEST_APP_VERSION_CODE = 2;
 
 const online = new Map();
 const pendingRequests = new Map();
@@ -417,7 +418,7 @@ async function handleApi(req, res, url) {
     }
 
     if (req.method === "GET" && url.pathname === "/api/version") {
-      return sendJson(res, 200, { hash: SERVER_RUN_ID });
+      return sendJson(res, 200, { hash: SERVER_RUN_ID, latestVersionCode: LATEST_APP_VERSION_CODE });
     }
 
     if (req.method === "POST" && url.pathname === "/api/signup") {
