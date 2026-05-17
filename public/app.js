@@ -135,6 +135,8 @@ let isPolite = false;
 const rtcConfig = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:74.125.143.127:19302" },
+    { urls: "stun:108.177.15.127:19302" },
     { urls: "stun:stun.cloudflare.com:3478" },
     { urls: "stun:global.stun.twilio.com:3478" },
     {
@@ -509,7 +511,11 @@ async function handleSignal(signal) {
 
     if (signal.candidate) {
       try {
-        await peer.addIceCandidate(signal.candidate);
+        if (!peer.remoteDescription) {
+          pendingIceCandidates.push(signal.candidate);
+        } else {
+          await peer.addIceCandidate(signal.candidate);
+        }
       } catch (err) {
         if (!ignoreOffer) console.error(err);
       }

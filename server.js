@@ -154,16 +154,24 @@ function normalizeEmail(email) {
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
-  const hash = crypto.scryptSync(String(password), salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }).toString("hex");
-  return `scrypt$${salt}$${hash}`;
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(String(password), salt, 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (err, derivedKey) => {
+      if (err) return reject(err);
+      resolve(`scrypt$${salt}$${derivedKey.toString("hex")}`);
+    });
+  });
 }
 
 function verifyPassword(password, passwordHash) {
-  const [scheme, salt, hash] = String(passwordHash).split("$");
-  if (scheme !== "scrypt" || !salt || !hash) return false;
-  const submitted = crypto.scryptSync(String(password), salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
-  const stored = Buffer.from(hash, "hex");
-  return stored.length === submitted.length && crypto.timingSafeEqual(stored, submitted);
+  return new Promise((resolve, reject) => {
+    const [scheme, salt, hash] = String(passwordHash).split("$");
+    if (scheme !== "scrypt" || !salt || !hash) return resolve(false);
+    crypto.scrypt(String(password), salt, 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (err, submitted) => {
+      if (err) return reject(err);
+      const stored = Buffer.from(hash, "hex");
+      resolve(stored.length === submitted.length && crypto.timingSafeEqual(stored, submitted));
+    });
+  });
 }
 
 function safeUser(user) {
@@ -441,7 +449,7 @@ async function handleApi(req, res, url) {
         req,
         email,
         username,
-        passwordHash: hashPassword(password),
+        passwordHash: await hashPassword(password),
         purpose: "signup",
         subject: "Barta verification link",
         path: "/api/magic/signup"
@@ -517,7 +525,7 @@ async function handleApi(req, res, url) {
       if (!user) return sendError(res, 401, "Invalid login.");
       if (!user.email_verified) return sendError(res, 403, "Account setup incomplete. Please sign up again.");
 
-      if (!verifyPassword(body.password, user.password_hash)) return sendError(res, 401, "Invalid login.");
+      if (!await verifyPassword(body.password, user.password_hash)) return sendError(res, 401, "Invalid login.");
 
       const token = await createSession(user);
       return sendJsonWithHeaders(res, 200, { user: safeUser(user) }, { "Set-Cookie": `${SESSION_COOKIE}=${token}; ${cookieOptions(req, SESSION_TTL_MS)}` });
@@ -565,7 +573,7 @@ async function handleApi(req, res, url) {
       if (passwordError) return sendError(res, 400, passwordError);
       if (body.password !== body.passwordConfirm) return sendError(res, 400, "Passwords do not match.");
 
-      await updateUserPassword(hashPassword(body.password), user.id);
+      await updateUserPassword(await hashPassword(body.password), user.id);
       return sendJson(res, 200, { ok: true });
     }
 
@@ -703,7 +711,7 @@ async function handleApi(req, res, url) {
         if (await findUserByUsername(username)) return sendError(res, 409, "Username already taken.");
         await run(
           "INSERT INTO users (id, email, username, password_hash, email_verified, created_at) VALUES ($1, $2, $3, $4, 1, $5)",
-          [crypto.randomUUID(), email, username, hashPassword(password), new Date().toISOString()]
+          [crypto.randomUUID(), email, username, await hashPassword(password), new Date().toISOString()]
         );
         return sendJson(res, 200, { ok: true, message: `User @${username} created with password: ${password}` });
       }
