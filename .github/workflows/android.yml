@@ -24,19 +24,22 @@ jobs:
       with:
         gradle-version: 9.5.1
 
-    - name: Build APK (System Gradle)
+    - name: Build APK
       run: |
         cd android
-        # We use 'gradle' instead of './gradlew' to avoid the missing JAR error
         gradle assembleRelease --stacktrace
+        # Rename the APK to Barta.apk so the download link is consistent
+        mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/Barta.apk
 
     - name: Create Release
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       uses: ncipollo/release-action@v1
       with:
-        artifacts: "android/app/build/outputs/apk/release/*.apk"
-        tag: "v${{ github.run_number }}"
-        name: "Release v${{ github.run_number }}"
-        body: "Automated build from GitHub Actions. Download the APK below."
+        artifacts: "android/app/build/outputs/apk/release/Barta.apk"
+        tag: "latest"
+        name: "Barta Latest Release"
+        body: "Automated build from GitHub Actions. Download Barta.apk below."
         token: ${{ secrets.GITHUB_TOKEN }}
         allowUpdates: true
+        removeArtifacts: true
+        replacesArtifacts: true
