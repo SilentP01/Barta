@@ -440,27 +440,55 @@ async function startPeer(isInitiator) {
   };
 
   let disconnectTimer = null;
+  let iceRestartTimer = null;
   peer.onconnectionstatechange = () => {
     const state = peer.connectionState;
     if (state === "connected") {
-      // Clear any pending disconnect timer when we recover
+      // Clear all recovery timers — connection is healthy
       if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
+      if (iceRestartTimer) { clearTimeout(iceRestartTimer); iceRestartTimer = null; }
+      // If we were reconnecting, let the user know we recovered
+      const lastMsg = messages?.lastElementChild;
+      if (lastMsg?.textContent?.includes("Reconnecting") || lastMsg?.textContent?.includes("recovery")) {
+        addSystemMessage("✅ Connection recovered");
+      }
     } else if (state === "disconnected") {
-      // "disconnected" is often temporary during ICE restarts — wait 8 seconds before giving up
-      disconnectTimer = setTimeout(() => {
-        if (peer && peer.connectionState === "disconnected" && currentPeer) {
+      // Wait 4 seconds — then try ICE restart before giving up
+      disconnectTimer = setTimeout(async () => {
+        if (!peer || !currentPeer || peer.connectionState !== "disconnected") return;
+        try {
+          addSystemMessage("⚠️ Weak connection — reconnecting…");
+          peer.restartIce(); // renegotiate network path without ending the call
+          // Give ICE restart 15 seconds to recover
+          iceRestartTimer = setTimeout(() => {
+            if (peer && (peer.connectionState === "disconnected" || peer.connectionState === "failed") && currentPeer) {
+              sendSocket("disconnect-peer");
+              resetPeer("Connection lost");
+            }
+          }, 15000);
+        } catch (e) {
           sendSocket("disconnect-peer");
           resetPeer("Connection lost");
         }
-      }, 8000);
+      }, 4000);
     } else if (state === "failed") {
       if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
-      if (currentPeer) {
-        sendSocket("disconnect-peer");
-        resetPeer("Connection failed");
+      // Attempt ICE restart on hard failure before giving up
+      try {
+        addSystemMessage("⚠️ Connection failed — attempting recovery…");
+        peer.restartIce();
+        iceRestartTimer = setTimeout(() => {
+          if (peer && peer.connectionState === "failed" && currentPeer) {
+            sendSocket("disconnect-peer");
+            resetPeer("Connection failed");
+          }
+        }, 10000);
+      } catch (e) {
+        if (currentPeer) { sendSocket("disconnect-peer"); resetPeer("Connection failed"); }
       }
     } else if (state === "closed") {
       if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
+      if (iceRestartTimer) { clearTimeout(iceRestartTimer); iceRestartTimer = null; }
     }
   };
 
@@ -557,8 +585,30 @@ async function startCall(withVideo = true) {
 async function _actuallyStartCall(withVideo = true) {
   if (!peer || !currentPeer || localStream) return;
   try {
+    // Solution 2: Constrain video quality for slow internet (640x480, 15fps ideal)
+    // Solution 5: Enhanced audio settings
     localStream = await navigator.mediaDevices.getUserMedia(
-      withVideo ? { video: true, audio: true } : { video: false, audio: true }
+      withVideo
+        ? {
+            video: {
+              width:  { ideal: 640, max: 1280 },
+              height: { ideal: 480, max: 720 },
+              frameRate: { ideal: 15, max: 30 }
+            },
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            }
+          }
+        : {
+            video: false,
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            }
+          }
     );
     if (window.BartaBridge) {
       window.BartaBridge.setCallActive(true);
@@ -576,7 +626,23 @@ async function _actuallyStartCall(withVideo = true) {
     startCallBtn.classList.add("hidden");
     startAudioBtn.classList.add("hidden");
     endCallBtn.classList.remove("hidden");
-    for (const track of localStream.getTracks()) peer.addTrack(track, localStream);
+    // Solution 4 + 5: Add tracks with bitrate cap and network priority
+    for (const track of localStream.getTracks()) {
+      const sender = peer.addTrack(track, localStream);
+      try {
+        const params = sender.getParameters();
+        if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+        if (track.kind === "video") {
+          params.encodings[0].maxBitrate = 800_000; // 800 Kbps cap — works on slow connections
+          params.encodings[0].priority = "medium";
+          params.encodings[0].networkPriority = "low";
+        } else if (track.kind === "audio") {
+          params.encodings[0].priority = "high";        // audio always wins bandwidth
+          params.encodings[0].networkPriority = "high";
+        }
+        await sender.setParameters(params);
+      } catch (e) { /* setParameters before negotiation is not supported on all browsers — safe to ignore */ }
+    }
     const notifyKind = withVideo ? "video-start" : "audio-start";
     if (channel?.readyState === "open") sendData(JSON.stringify({ kind: notifyKind }));
   } catch (error) {
