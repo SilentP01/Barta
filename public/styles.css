@@ -645,7 +645,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .call-btn.end-call:hover { background: #fecaca; }
 .call-btn:disabled { opacity: .4; }
 
-#muteBtn, #pauseBtn { display: none; }
+
 
 .call-btn.active-opt {
   background: var(--accent) !important;

@@ -16,10 +16,15 @@ android {
     }
 
     buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        debug {
             signingConfig signingConfigs.debug
+        }
+        release {
+            // NOTE: Provide a release keystore via environment variables for production signing.
+            // For sideloaded APK distribution, debug signing is used as a fallback.
+            signingConfig signingConfigs.debug
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
     compileOptions {

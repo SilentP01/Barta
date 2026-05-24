@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.WindowManager
 import android.webkit.*
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -30,6 +31,18 @@ class MainActivity : AppCompatActivity() {
 
         webView = WebView(this)
         setContentView(webView)
+
+        // BUG-10: Use modern OnBackPressedDispatcher instead of deprecated onBackPressed()
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
 
         setupWebView()
         checkPermissions()
@@ -203,7 +216,11 @@ class MainActivity : AppCompatActivity() {
     private fun checkForUpdates() {
         thread {
             try {
-                val response = java.net.URL("${baseUrl}api/version").readText()
+                val conn = java.net.URL("${baseUrl}api/version").openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 5_000
+                conn.readTimeout = 5_000
+                val response = conn.inputStream.bufferedReader().readText()
+                conn.disconnect()
                 val json = org.json.JSONObject(response)
                 val serverVersionCode = json.optInt("latestVersionCode", 1)
 
@@ -242,12 +259,5 @@ class MainActivity : AppCompatActivity() {
             }
             .show()
     }
-
-    override fun onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            super.onBackPressed()
-        }
-    }
 }
+

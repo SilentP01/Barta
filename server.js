@@ -13,7 +13,7 @@ process.on("unhandledRejection", (err) => {
   console.error("Unhandled Rejection:", err);
 });
 
-const PORT = process.env.PORT || 3000;
+
 const HOST = process.env.HOST || "0.0.0.0";
 const PUBLIC_DIR = path.join(__dirname, "public");
 const SESSION_COOKIE = "p2p_session";
@@ -91,10 +91,6 @@ async function initDatabase() {
     used_at BIGINT,
     created_at TEXT NOT NULL
   );
-
-  ALTER TABLE otps ALTER COLUMN expires_at TYPE BIGINT;
-  ALTER TABLE magic_links ALTER COLUMN expires_at TYPE BIGINT;
-  ALTER TABLE magic_links ALTER COLUMN used_at TYPE BIGINT;
 
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
@@ -316,7 +312,15 @@ function validateSignup(email, username, password, passwordConfirm) {
 }
 
 function validatePassword(password) {
-  return validateSignup("user@example.com", "username", password, password);
+  const blockedPasswords = new Set([
+    "password123", "password1234", "password@123",
+    "admin12345", "qwerty12345", "welcome123", "letmein123"
+  ]);
+  if (password.length < 10) return "Password must be at least 10 characters.";
+  if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password))
+    return "Password must include uppercase, lowercase, and a number.";
+  if (blockedPasswords.has(password.toLowerCase())) return "Use a stronger password.";
+  return "";
 }
 
 async function sendMagicLinkEmail(to, subject, link) {
@@ -721,7 +725,8 @@ async function handleApi(req, res, url) {
         const identifier = decodeURIComponent(url.pathname.replace("/api/admin/users/", ""));
         const user = await one("SELECT id, username FROM users WHERE email = $1 OR username = $1", [identifier.toLowerCase()]);
         if (!user) return sendError(res, 404, "User not found.");
-        await run("DELETE FROM sessions WHERE user_id = $1", [user.id]);
+        // Clear any in-memory sessions for this user
+        for (const [hash, s] of sessionStore) { if (s.userId === user.id) sessionStore.delete(hash); }
         await run("DELETE FROM users WHERE id = $1", [user.id]);
         // kick them offline if connected
         const entry = online.get(user.id);
@@ -982,6 +987,11 @@ async function acceptWebSocket(req, socket) {
 
       if (frame.opcode === 0x1 || frame.opcode === 0x0) {
         messageFragments.push(frame.payload);
+        const totalFragmentSize = messageFragments.reduce((sum, b) => sum + b.length, 0);
+        if (totalFragmentSize > 65536) { // 64 KB max per WebSocket message
+          socket.end();
+          return;
+        }
         if (frame.fin) {
           const fullMessage = Buffer.concat(messageFragments).toString("utf8");
           messageFragments = [];

@@ -22,9 +22,9 @@ const profilePanel = document.querySelector("#profilePanel");
 const profileEmail = document.querySelector("#profileEmail");
 const profileNotice = document.querySelector("#profileNotice");
 const profileEmailForm = document.querySelector("#profileEmailForm");
-const profileEmailVerifyForm = document.querySelector("#profileEmailVerifyForm");
+
 const profilePasswordOtpForm = document.querySelector("#profilePasswordOtpForm");
-const profilePasswordForm = document.querySelector("#profilePasswordForm");
+
 const forgotPasswordBtn = document.querySelector("#forgotPasswordBtn");
 const backToLoginBtn = document.querySelector("#backToLoginBtn");
 const resendVerifyBtn = document.querySelector("#resendVerifyBtn");
@@ -328,7 +328,7 @@ function showPeer(peerUser) {
 }
 
 function resetPeer(note = "Disconnected") {
-  stopVideoCall(false);
+  if (localStream || remoteStream) _cleanupCallUI();
   if (channel) channel.close();
   if (peer) peer.close();
   channel = null;
@@ -343,6 +343,7 @@ function resetPeer(note = "Disconnected") {
   ignoreOffer = false;
   isPolite = false;
   pendingCallKind = null;
+  hideCallRequestPopup();
   if (messages) messages.innerHTML = "";
   setComposerReady(false);
   peerView.classList.add("hidden");
@@ -1016,27 +1017,7 @@ profileEmailForm.addEventListener("submit", async (event) => {
   }
 });
 
-profileEmailVerifyForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  setProfileNotice();
-  const form = new FormData(profileEmailVerifyForm);
-  setFormLoading(profileEmailVerifyForm, true, "Verifying...");
-  try {
-    await postJson("/api/profile/email/verify", {
-      email: pendingProfileEmail,
-      code: form.get("code")
-    });
-    profileEmail.textContent = pendingProfileEmail;
-    profileEmailForm.reset();
-    profileEmailVerifyForm.reset();
-    profileEmailVerifyForm.classList.add("hidden");
-    setProfileNotice("Email updated.");
-  } catch (error) {
-    setProfileNotice(error.message);
-  } finally {
-    setFormLoading(profileEmailVerifyForm, false);
-  }
-});
+
 
 profilePasswordOtpForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -1052,26 +1033,7 @@ profilePasswordOtpForm.addEventListener("submit", async (event) => {
   }
 });
 
-profilePasswordForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  setProfileNotice();
-  const form = new FormData(profilePasswordForm);
-  setFormLoading(profilePasswordForm, true, "Updating...");
-  try {
-    await postJson("/api/profile/password", {
-      code: form.get("code"),
-      password: form.get("password"),
-      passwordConfirm: form.get("passwordConfirm")
-    });
-    profilePasswordForm.reset();
-    profilePasswordForm.classList.add("hidden");
-    setProfileNotice("Password updated.");
-  } catch (error) {
-    setProfileNotice(error.message);
-  } finally {
-    setFormLoading(profilePasswordForm, false);
-  }
-});
+
 
 searchForm.addEventListener("submit", async (event) => {
   event.preventDefault();
