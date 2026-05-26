@@ -29,6 +29,7 @@ const forgotPasswordBtn = document.querySelector("#forgotPasswordBtn");
 const backToLoginBtn = document.querySelector("#backToLoginBtn");
 const resendVerifyBtn = document.querySelector("#resendVerifyBtn");
 const verifyBackBtn = document.querySelector("#verifyBackBtn");
+const forceRelayToggle = document.querySelector("#forceRelayToggle");
 const searchForm = document.querySelector("#searchForm");
 const searchResult = document.querySelector("#searchResult");
 const userList = document.querySelector("#userList");
@@ -269,19 +270,37 @@ function renderUsers(users = []) {
         <div class="status ${user.status}">${user.status}</div>
       </div>
     `;
-    if (user.status === "online" && !currentPeer) {
-      const button = document.createElement("button");
-      button.className = "secondary";
-      button.textContent = "Request";
-      button.addEventListener("click", () => {
-        if (isMobileDevice && !isNativeBarta) {
-          showPrivacyWarningToast();
-        }
-        sendSocket("request", { to: user.id });
-      });
-      row.appendChild(button);
+    if (user.status === "online") {
+      if (!currentPeer) {
+        const button = document.createElement("button");
+        button.className = "secondary";
+        button.textContent = "Request";
+        button.addEventListener("click", (e) => {
+          e.stopPropagation(); // prevent row click
+          if (isMobileDevice && !isNativeBarta) showPrivacyWarningToast();
+          sendSocket("request", { to: user.id });
+        });
+        row.appendChild(button);
+      } else {
+        // We are connected. Make the row clickable to return or swap.
+        row.style.cursor = "pointer";
+        row.addEventListener("click", () => {
+          if (currentPeer.id === user.id) {
+            // Already connected to this person, just slide chat back in
+            showWorkspace();
+          } else {
+            // Connected to someone else
+            if (confirm(`Disconnect from @${currentPeer.username} to connect to @${user.username}?`)) {
+              resetPeer();
+              if (isMobileDevice && !isNativeBarta) showPrivacyWarningToast();
+              sendSocket("request", { to: user.id });
+            }
+          }
+        });
+      }
     }
     userList.appendChild(row);
+
   }
 }
 
@@ -412,7 +431,10 @@ async function startPeer(isInitiator) {
   isPolite = !isInitiator;
   const queuedBeforeStart = pendingSignals;
   pendingSignals = [];
-  peer = new RTCPeerConnection(rtcConfig);
+
+  const isRelayMode = localStorage.getItem("barta-relay") === "1";
+  const config = isRelayMode ? { ...rtcConfig, iceTransportPolicy: "relay" } : rtcConfig;
+  peer = new RTCPeerConnection(config);
 
   peer.onicecandidate = (event) => {
     if (event.candidate) sendSocket("signal", { signal: { candidate: event.candidate } });
@@ -478,7 +500,7 @@ async function startPeer(isInitiator) {
       // (avoids triggering recovery during the initial handshake)
       if (!wasConnected || isRecovering) return;
 
-      // Wait 5 seconds — then try ICE restart (renegotiate network path)
+      // Wait 3 seconds — then try ICE restart (renegotiate network path)
       disconnectTimer = setTimeout(async () => {
         if (!peer || !currentPeer) return;
         if (peer.connectionState === "connected") return; // recovered on its own
@@ -487,14 +509,15 @@ async function startPeer(isInitiator) {
         try {
           addSystemMessage("⚠️ Weak connection — reconnecting…");
           peer.restartIce();
-          // Give 30 more seconds to recover — total ~35 seconds from disconnect
+          // Give 12 more seconds to recover — total 15 seconds from disconnect
           iceRestartTimer = setTimeout(() => {
             if (peer && currentPeer &&
                 (peer.connectionState === "disconnected" || peer.connectionState === "failed")) {
               sendSocket("disconnect-peer");
               resetPeer("Connection lost");
             }
-          }, 30000);
+          }, 12000);
+
         } catch (e) {
           sendSocket("disconnect-peer");
           resetPeer("Connection lost");
@@ -517,13 +540,13 @@ async function startPeer(isInitiator) {
       try {
         addSystemMessage("⚠️ Connection lost — attempting recovery…");
         peer.restartIce();
-        // 30 seconds to recover before giving up
+        // 15 seconds to recover before giving up
         iceRestartTimer = setTimeout(() => {
           if (peer && peer.connectionState === "failed" && currentPeer) {
             sendSocket("disconnect-peer");
             resetPeer("Connection failed");
           }
-        }, 30000);
+        }, 15000);
       } catch (e) {
         if (currentPeer) { sendSocket("disconnect-peer"); resetPeer("Connection failed"); }
       }
@@ -1381,6 +1404,20 @@ profileBtn.addEventListener("click", async () => {
 
 closeProfileBtn.addEventListener("click", () => profilePanel.classList.add("hidden"));
 
+// Force Relay toggle
+if (forceRelayToggle) {
+  forceRelayToggle.checked = localStorage.getItem("barta-relay") === "1";
+  forceRelayToggle.addEventListener("change", (e) => {
+    if (e.target.checked) {
+      localStorage.setItem("barta-relay", "1");
+      setProfileNotice("Relay Mode ON. (Requires reconnect)");
+    } else {
+      localStorage.setItem("barta-relay", "0");
+      setProfileNotice("Relay Mode OFF. (Requires reconnect)");
+    }
+  });
+}
+
 profileEmailForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   setProfileNotice();
@@ -1618,10 +1655,17 @@ window.addEventListener("popstate", () => {
 });
 
 // ─── AUTO-UPDATE CHECK ────────────────────────────────────────────────────────
-// Poll /api/version every 60 s. If the server hash changes, reload the page.
-// Reload is deferred if the user is currently in a live call.
+// Poll /api/version every 60 s. If the server hash changes, prompt for update.
 (function autoUpdateCheck() {
   let knownHash = null;
+  const banner = document.getElementById("updateBanner");
+  const reloadBtn = document.getElementById("updateReloadBtn");
+  reloadBtn?.addEventListener("click", () => window.location.reload());
+  
+  window.addEventListener("offline", () => {
+    if (currentPeer) addSystemMessage("🚫 No internet connection.");
+  });
+
   async function checkVersion() {
     try {
       const res = await fetch('/api/version', { cache: 'no-store' });
@@ -1630,11 +1674,12 @@ window.addEventListener("popstate", () => {
       if (!hash) return;
       if (knownHash === null) { knownHash = hash; return; }
       if (hash !== knownHash) {
-        if (!currentPeer || !localStream) {
-          knownHash = hash;
-          window.location.reload();
+        knownHash = hash;
+        if (isNativeBarta && window.BartaBridge?.triggerNativeUpdate) {
+          window.BartaBridge.triggerNativeUpdate();
+        } else {
+          banner?.classList.remove("hidden");
         }
-        // If in a call, leave knownHash as is. The next poll will trigger this again.
       }
     } catch { /* ignore network errors */ }
   }

@@ -57,6 +57,13 @@ class MainActivity : AppCompatActivity() {
                 activity.isCallActive = isActive
             }
         }
+        
+        @android.webkit.JavascriptInterface
+        fun triggerNativeUpdate() {
+            activity.runOnUiThread {
+                activity.showUpdateDialog()
+            }
+        }
     }
 
     override fun onUserLeaveHint() {

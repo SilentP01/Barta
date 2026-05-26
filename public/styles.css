@@ -364,7 +364,28 @@ input:focus { border-color: var(--accent); outline: 3px solid rgba(15,124,134,.1
 .danger { background: #fee2e2; color: var(--danger); }
 .danger:hover:not(:disabled) { background: #fecaca; }
 
-button:disabled { opacity: 0.5; cursor: not-allowed; }
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.small {
+  padding: 6px 14px;
+  font-size: 0.8rem;
+}
+
+.update-banner {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
 
 .notice { min-height: 22px; margin-top: 10px; color: var(--danger); font-weight: 600; font-size: .9rem; }
 .hidden { display: none !important; }
@@ -1595,3 +1616,28 @@ html.native-app #backToHomeBtn {
 [data-theme="dark"] .file-card:hover {
   background: rgba(99,102,241,0.1);
 }
+
+/* ═══════════════════════════════════════════════════
+   UPDATE BANNER
+   ═══════════════════════════════════════════════════ */
+.update-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background: var(--accent);
+  color: white;
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px 20px;
+  gap: 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transform: translateY(0);
+  transition: transform 0.3s ease;
+}
+.update-banner.hidden {
+  transform: translateY(-100%);
+}
+
