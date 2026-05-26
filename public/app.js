@@ -74,6 +74,19 @@ const themeToggle = document.querySelector("#themeToggle");
 const themeIcon = document.querySelector("#themeIcon");
 const refreshBtn = document.querySelector("#refreshBtn");
 
+// ─── Media Viewer refs ──────────────────────────────────
+const mediaViewer = document.querySelector("#mediaViewer");
+const mvBackdrop  = document.querySelector("#mvBackdrop");
+const mvTitle     = document.querySelector("#mvTitle");
+const mvSave      = document.querySelector("#mvSave");
+const mvClose     = document.querySelector("#mvClose");
+const mvBody      = document.querySelector("#mvBody");
+const mvZoomBar   = document.querySelector("#mvZoomBar");
+const mvZoomIn    = document.querySelector("#mvZoomIn");
+const mvZoomOut   = document.querySelector("#mvZoomOut");
+const mvZoomFit   = document.querySelector("#mvZoomFit");
+const mvZoomPct   = document.querySelector("#mvZoomPct");
+
 const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const isNativeBarta = navigator.userAgent.includes("BartaNativeAndroid");
 
@@ -800,17 +813,39 @@ function addFileMessage(file, url, mine = false) {
   item.className = `message ${mine ? "mine" : ""}`;
 
   if (file.type.startsWith("image/")) {
-    const image = document.createElement("img");
-    image.src = url;
-    image.alt = file.name;
-    item.appendChild(image);
-  }
+    // ── Image: thumbnail → tap to open lightbox
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = file.name;
+    img.className = "media-thumb";
+    img.addEventListener("click", () => openMediaViewer(url, "image", file.name));
+    item.appendChild(img);
 
-  if (file.type.startsWith("video/")) {
-    const video = document.createElement("video");
-    video.src = url;
-    video.controls = true;
-    item.appendChild(video);
+  } else if (file.type.startsWith("video/")) {
+    // ── Video: preview with play button → tap to open fullscreen player
+    const wrap = document.createElement("div");
+    wrap.className = "video-thumb-wrap";
+    wrap.title = "Tap to play";
+    const vid = document.createElement("video");
+    vid.src = url;
+    vid.preload = "metadata";
+    const overlay = document.createElement("div");
+    overlay.className = "video-play-overlay";
+    const circle = document.createElement("div");
+    circle.className = "video-play-circle";
+    circle.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="#222"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+    overlay.appendChild(circle);
+    wrap.append(vid, overlay);
+    wrap.addEventListener("click", () => openMediaViewer(url, "video", file.name));
+    item.appendChild(wrap);
+
+  } else if (file.type.startsWith("audio/")) {
+    // ── Audio: inline Telegram-style player
+    item.appendChild(buildAudioPlayer(url, file.name));
+
+  } else {
+    // ── Other file: styled file card
+    item.appendChild(buildFileCard(file, url));
   }
 
   const name = document.createElement("div");
@@ -826,6 +861,265 @@ function addFileMessage(file, url, mine = false) {
   item.append(name, save);
   messages.appendChild(item);
   messages.scrollTop = messages.scrollHeight;
+}
+
+/* ─── Media Viewer ────────────────────────────────────────── */
+
+let _mvScale = 1;
+const MV_SCALE_STEP = 0.25;
+const MV_SCALE_MAX  = 3;
+const MV_SCALE_MIN  = 0.5;
+
+function openMediaViewer(url, type, name) {
+  mvBody.innerHTML = "";
+  mvTitle.textContent = name;
+  mvSave.href = url;
+  mvSave.download = name;
+  _mvScale = 1;
+
+  if (type === "image") {
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = name;
+    img.draggable = false;
+    // Double-tap / double-click to zoom in
+    img.addEventListener("dblclick", () => {
+      if (_mvScale === 1) _mvScaleStep(1); else { _mvScale = 1; _mvApplyZoom(); }
+    });
+    mvBody.appendChild(img);
+    mvZoomBar.classList.remove("hidden");
+    _mvUpdateZoomUI();
+    _mvSetupPinchZoom(img);
+
+  } else if (type === "video") {
+    const vid = document.createElement("video");
+    vid.src = url;
+    vid.controls = true;
+    vid.autoplay = true;
+    vid.playsInline = true;
+    vid.className = "mv-video";
+    mvBody.appendChild(vid);
+    mvZoomBar.classList.add("hidden");
+  }
+
+  mediaViewer.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+}
+
+function closeMediaViewer() {
+  const vid = mvBody.querySelector("video");
+  if (vid) { vid.pause(); vid.src = ""; }
+  mvBody.innerHTML = "";
+  mediaViewer.classList.add("hidden");
+  document.body.style.overflow = "";
+  _mvScale = 1;
+}
+
+function _mvScaleStep(dir) {
+  _mvScale = Math.max(MV_SCALE_MIN, Math.min(MV_SCALE_MAX, _mvScale + dir * MV_SCALE_STEP));
+  _mvApplyZoom();
+}
+
+function _mvApplyZoom() {
+  const img = mvBody.querySelector("img");
+  if (!img) return;
+  img.style.transform = `scale(${_mvScale})`;
+  img.style.cursor = _mvScale > 1 ? "grab" : "zoom-in";
+  _mvUpdateZoomUI();
+}
+
+function _mvUpdateZoomUI() {
+  if (mvZoomPct) mvZoomPct.textContent = `${Math.round(_mvScale * 100)}%`;
+}
+
+function _mvSetupPinchZoom(el) {
+  let startDist = 0, startScale = 1;
+  el.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 2) {
+      startDist = Math.hypot(
+        e.touches[1].clientX - e.touches[0].clientX,
+        e.touches[1].clientY - e.touches[0].clientY
+      );
+      startScale = _mvScale;
+    }
+  }, { passive: true });
+  el.addEventListener("touchmove", (e) => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[1].clientX - e.touches[0].clientX,
+        e.touches[1].clientY - e.touches[0].clientY
+      );
+      _mvScale = Math.max(MV_SCALE_MIN, Math.min(MV_SCALE_MAX, startScale * (dist / startDist)));
+      _mvApplyZoom();
+    }
+  }, { passive: true });
+}
+
+// Viewer button wiring
+mvClose?.addEventListener("click", closeMediaViewer);
+mvBackdrop?.addEventListener("click", closeMediaViewer);
+mvZoomIn?.addEventListener("click", () => _mvScaleStep(1));
+mvZoomOut?.addEventListener("click", () => _mvScaleStep(-1));
+mvZoomFit?.addEventListener("click", () => { _mvScale = 1; _mvApplyZoom(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && mediaViewer && !mediaViewer.classList.contains("hidden")) {
+    closeMediaViewer();
+  }
+});
+
+/* ─── Inline Audio Player (Telegram-style) ─────────────── */
+
+function buildAudioPlayer(url, name) {
+  const wrap = document.createElement("div");
+  wrap.className = "audio-player";
+
+  const btn = document.createElement("button");
+  btn.className = "audio-play-btn";
+  btn.setAttribute("aria-label", "Play/Pause");
+  btn.innerHTML = _mvPlayIcon();
+
+  const info = document.createElement("div");
+  info.className = "audio-info";
+
+  const nameEl = document.createElement("div");
+  nameEl.className = "audio-name";
+  nameEl.textContent = name;
+
+  const row = document.createElement("div");
+  row.className = "audio-progress-row";
+
+  const track = document.createElement("div");
+  track.className = "audio-progress";
+  const fill = document.createElement("div");
+  fill.className = "audio-progress-fill";
+  track.appendChild(fill);
+
+  const timeEl = document.createElement("span");
+  timeEl.className = "audio-time";
+  timeEl.textContent = "0:00";
+
+  row.append(track, timeEl);
+  info.append(nameEl, row);
+
+  const audio = new Audio(url);
+  audio.preload = "metadata";
+
+  let playing = false;
+
+  btn.addEventListener("click", () => {
+    if (playing) {
+      audio.pause();
+    } else {
+      // Pause all other audio players on the page
+      document.querySelectorAll(".audio-player-el").forEach(a => { if (a !== audio) a.pause(); });
+      audio.play().catch(() => {});
+    }
+  });
+
+  audio.className = "audio-player-el";
+
+  audio.addEventListener("play",  () => { playing = true;  btn.innerHTML = _mvPauseIcon(); });
+  audio.addEventListener("pause", () => { playing = false; btn.innerHTML = _mvPlayIcon();  });
+  audio.addEventListener("ended", () => {
+    playing = false;
+    btn.innerHTML = _mvPlayIcon();
+    fill.style.width = "0%";
+    timeEl.textContent = "0:00";
+  });
+  audio.addEventListener("timeupdate", () => {
+    if (!audio.duration) return;
+    fill.style.width = `${(audio.currentTime / audio.duration) * 100}%`;
+    timeEl.textContent = `${_fmtTime(audio.currentTime)} / ${_fmtTime(audio.duration)}`;
+  });
+  audio.addEventListener("loadedmetadata", () => {
+    timeEl.textContent = `0:00 / ${_fmtTime(audio.duration)}`;
+  });
+  track.addEventListener("click", (e) => {
+    if (!audio.duration) return;
+    const r = track.getBoundingClientRect();
+    audio.currentTime = ((e.clientX - r.left) / r.width) * audio.duration;
+  });
+
+  wrap.append(btn, info);
+  wrap.appendChild(audio); // attach to DOM so it persists
+  audio.style.display = "none";
+  return wrap;
+}
+
+function _mvPlayIcon() {
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+}
+function _mvPauseIcon() {
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
+}
+function _fmtTime(s) {
+  const sec = Math.floor(s);
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+}
+
+/* ─── File Card (non-media files) ──────────────────────── */
+
+function buildFileCard(file, url) {
+  const ext  = (file.name.split(".").pop() || "").toLowerCase();
+  const icon = _fileIcon(ext);
+  const size = _fmtBytes(file.size);
+
+  const card = document.createElement("div");
+  card.className = "file-card";
+  card.title = "Click to download";
+
+  const iconEl = document.createElement("div");
+  iconEl.className = "file-card-icon";
+  iconEl.textContent = icon;
+
+  const details = document.createElement("div");
+  details.className = "file-card-details";
+
+  const nameEl = document.createElement("div");
+  nameEl.className = "file-card-name";
+  nameEl.textContent = file.name;
+
+  const meta = document.createElement("div");
+  meta.className = "file-card-meta";
+  const extBadge = document.createElement("span");
+  extBadge.className = "file-card-ext";
+  extBadge.textContent = ext || "file";
+  const sizeSpan = document.createElement("span");
+  sizeSpan.textContent = size;
+  meta.append(extBadge, sizeSpan);
+
+  details.append(nameEl, meta);
+  card.append(iconEl, details);
+
+  card.addEventListener("click", () => {
+    const a = document.createElement("a");
+    a.href = url; a.download = file.name; a.click();
+  });
+
+  return card;
+}
+
+function _fileIcon(ext) {
+  const m = {
+    pdf: "📄",
+    doc: "📝", docx: "📝",
+    xls: "📊", xlsx: "📊", csv: "📊",
+    ppt: "📑", pptx: "📑",
+    zip: "🗜️", rar: "🗜️", "7z": "🗜️", gz: "🗜️", tar: "🗜️",
+    txt: "📃", md: "📃",
+    apk: "📱",
+    exe: "⚙️", msi: "⚙️",
+    js:  "💻", ts: "💻", py: "💻", html: "💻", css: "💻",
+    json: "📋", xml: "📋",
+  };
+  return m[ext] || "📎";
+}
+
+function _fmtBytes(b) {
+  if (!b) return "";
+  if (b < 1024)           return `${b} B`;
+  if (b < 1024 * 1024)   return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function showCallRequestPopup(kind) {

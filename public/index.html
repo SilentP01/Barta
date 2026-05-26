@@ -398,6 +398,29 @@
       </div>
     </div>
 
-    <script src="/app.js?v=32"></script>
+    <!-- ─── MEDIA VIEWER (Telegram-style) ─────────────────── -->
+    <div id="mediaViewer" class="media-viewer hidden" role="dialog" aria-modal="true" aria-label="Media viewer">
+      <div id="mvBackdrop" class="mv-backdrop"></div>
+      <div class="mv-topbar">
+        <span id="mvTitle" class="mv-title"></span>
+        <div class="mv-topbar-actions">
+          <a id="mvSave" class="mv-action-btn" title="Save file" download>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </a>
+          <button id="mvClose" class="mv-action-btn" title="Close (Esc)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="mvBody" class="mv-body"></div>
+      <div id="mvZoomBar" class="mv-zoombar hidden">
+        <button id="mvZoomOut" class="mv-zoom-btn" title="Zoom out">−</button>
+        <span id="mvZoomPct" class="mv-zoom-pct">100%</span>
+        <button id="mvZoomIn" class="mv-zoom-btn" title="Zoom in">+</button>
+        <button id="mvZoomFit" class="mv-zoom-btn" title="Fit to screen">Fit</button>
+      </div>
+    </div>
+
+    <script src="/app.js?v=33"></script>
   </body>
 </html>
