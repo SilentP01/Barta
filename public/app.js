@@ -147,18 +147,28 @@ let isPolite = false;
 
 const rtcConfig = {
   iceServers: [
+    // Google STUN — 5 servers for maximum coverage
     { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun3.l.google.com:19302" },
+    { urls: "stun:stun4.l.google.com:19302" },
+    // Google STUN by IP — bypasses DNS, faster on slow networks
     { urls: "stun:74.125.143.127:19302" },
     { urls: "stun:108.177.15.127:19302" },
+    // Cloudflare STUN
     { urls: "stun:stun.cloudflare.com:3478" },
+    // Twilio STUN
     { urls: "stun:global.stun.twilio.com:3478" },
+    // Additional STUN fallbacks
+    { urls: "stun:stun.ekiga.net" },
+    { urls: "stun:stun.freeswitch.org" },
+    // TURN (openrelay — free shared relay, primary)
     {
-      urls: "turn:openrelay.metered.ca:80",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    },
-    {
-      urls: "turn:openrelay.metered.ca:443",
+      urls: [
+        "turn:openrelay.metered.ca:80",
+        "turn:openrelay.metered.ca:443"
+      ],
       username: "openrelayproject",
       credential: "openrelayproject"
     },
@@ -166,9 +176,27 @@ const rtcConfig = {
       urls: "turn:openrelay.metered.ca:443?transport=tcp",
       username: "openrelayproject",
       credential: "openrelayproject"
+    },
+    // TURN (freestun — backup free relay)
+    {
+      urls: [
+        "turn:freestun.net:3478",
+        "turn:freestun.net:3479"
+      ],
+      username: "free",
+      credential: "free"
+    },
+    {
+      urls: "turns:freestun.net:5349",
+      username: "free",
+      credential: "free"
     }
-  ]
+  ],
+  iceCandidatePoolSize: 10,   // pre-gather candidates before call starts = faster connect
+  bundlePolicy: "max-bundle", // group all media on one transport = more compatible
+  rtcpMuxPolicy: "require"    // require RTCP multiplexing = better NAT traversal
 };
+
 
 function setNotice(text = "") {
   authNotice.textContent = text;
@@ -420,9 +448,10 @@ async function startPeer(isInitiator) {
 
   peer.onnegotiationneeded = async () => {
     try {
+      if (peer.signalingState !== "stable") return; // avoid collision before even creating offer
       makingOffer = true;
       const offer = await peer.createOffer();
-      if (peer.signalingState !== "stable") return;
+      if (peer.signalingState !== "stable") return; // re-check after async createOffer
       await peer.setLocalDescription(offer);
       sendSocket("signal", { signal: { description: peer.localDescription } });
     } catch (err) {
