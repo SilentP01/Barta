@@ -454,54 +454,84 @@ async function startPeer(isInitiator) {
 
   let disconnectTimer = null;
   let iceRestartTimer = null;
+  let wasConnected   = false; // true only after first successful "connected" state
+  let isRecovering   = false; // prevents duplicate recovery attempts + messages
+
   peer.onconnectionstatechange = () => {
     const state = peer.connectionState;
+
     if (state === "connected") {
+      wasConnected = true;
+      isRecovering = false;
       // Clear all recovery timers — connection is healthy
       if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
       if (iceRestartTimer) { clearTimeout(iceRestartTimer); iceRestartTimer = null; }
-      // If we were reconnecting, let the user know we recovered
+      // Show "restored" message only if we were recovering
       const lastMsg = messages?.lastElementChild;
-      if (lastMsg?.textContent?.includes("Reconnecting") || lastMsg?.textContent?.includes("recovery")) {
-        addSystemMessage("✅ Connection recovered");
+      if (lastMsg?.textContent?.includes("reconnecting") || lastMsg?.textContent?.includes("recovery")) {
+        addSystemMessage("✅ Connection restored");
       }
+
     } else if (state === "disconnected") {
-      // Wait 4 seconds — then try ICE restart before giving up
+      // Only attempt recovery if this peer was ever successfully connected
+      // (avoids triggering recovery during the initial handshake)
+      if (!wasConnected || isRecovering) return;
+
+      // Wait 5 seconds — then try ICE restart (renegotiate network path)
       disconnectTimer = setTimeout(async () => {
-        if (!peer || !currentPeer || peer.connectionState !== "disconnected") return;
+        if (!peer || !currentPeer) return;
+        if (peer.connectionState === "connected") return; // recovered on its own
+        if (isRecovering) return;
+        isRecovering = true;
         try {
           addSystemMessage("⚠️ Weak connection — reconnecting…");
-          peer.restartIce(); // renegotiate network path without ending the call
-          // Give ICE restart 15 seconds to recover
+          peer.restartIce();
+          // Give 30 more seconds to recover — total ~35 seconds from disconnect
           iceRestartTimer = setTimeout(() => {
-            if (peer && (peer.connectionState === "disconnected" || peer.connectionState === "failed") && currentPeer) {
+            if (peer && currentPeer &&
+                (peer.connectionState === "disconnected" || peer.connectionState === "failed")) {
               sendSocket("disconnect-peer");
               resetPeer("Connection lost");
             }
-          }, 15000);
+          }, 30000);
         } catch (e) {
           sendSocket("disconnect-peer");
           resetPeer("Connection lost");
         }
-      }, 4000);
+      }, 5000);
+
     } else if (state === "failed") {
       if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
-      // Attempt ICE restart on hard failure before giving up
+
+      if (!wasConnected) {
+        // Initial handshake failed — ICE restart is pointless here, just reset cleanly
+        if (currentPeer) { sendSocket("disconnect-peer"); resetPeer("Failed to connect"); }
+        return;
+      }
+
+      // Already handling recovery (e.g. from "disconnected" path) — don't double up
+      if (isRecovering) return;
+      isRecovering = true;
+
       try {
-        addSystemMessage("⚠️ Connection failed — attempting recovery…");
+        addSystemMessage("⚠️ Connection lost — attempting recovery…");
         peer.restartIce();
+        // 30 seconds to recover before giving up
         iceRestartTimer = setTimeout(() => {
           if (peer && peer.connectionState === "failed" && currentPeer) {
             sendSocket("disconnect-peer");
             resetPeer("Connection failed");
           }
-        }, 10000);
+        }, 30000);
       } catch (e) {
         if (currentPeer) { sendSocket("disconnect-peer"); resetPeer("Connection failed"); }
       }
+
     } else if (state === "closed") {
       if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
       if (iceRestartTimer) { clearTimeout(iceRestartTimer); iceRestartTimer = null; }
+      wasConnected = false;
+      isRecovering = false;
     }
   };
 
