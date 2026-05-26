@@ -19,6 +19,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private val baseUrl = "https://barta.up.railway.app/"
     var isCallActive = false
+    private var fileChooserCallback: ValueCallback<Array<android.net.Uri>>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -194,6 +195,25 @@ class MainActivity : AppCompatActivity() {
                     request.grant(request.resources)
                 }
             }
+
+            // Handle file uploads
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<android.net.Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                fileChooserCallback?.onReceiveValue(null)
+                fileChooserCallback = filePathCallback
+
+                val intent = fileChooserParams?.createIntent()
+                try {
+                    startActivityForResult(intent!!, 100)
+                } catch (e: Exception) {
+                    fileChooserCallback = null
+                    return false
+                }
+                return true
+            }
         }
 
         webView.loadUrl(baseUrl)
@@ -259,5 +279,25 @@ class MainActivity : AppCompatActivity() {
             }
             .show()
     }
-}
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == 100) {
+            var results: Array<android.net.Uri>? = null
+            if (resultCode == RESULT_OK && data != null) {
+                val dataString = data.dataString
+                val clipData = data.clipData
+                if (clipData != null) {
+                    results = Array(clipData.itemCount) { i ->
+                        clipData.getItemAt(i).uri
+                    }
+                } else if (dataString != null) {
+                    results = arrayOf(android.net.Uri.parse(dataString))
+                }
+            }
+            fileChooserCallback?.onReceiveValue(results)
+            fileChooserCallback = null
+        } else {
+            super.onActivityResult(requestCode, resultCode, data)
+        }
+    }
+}

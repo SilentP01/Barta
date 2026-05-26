@@ -879,17 +879,6 @@ function addFileMessage(file, url, mine = false) {
     item.appendChild(buildFileCard(file, url));
   }
 
-  const name = document.createElement("div");
-  name.className = "file-name";
-  name.textContent = file.name;
-
-  const save = document.createElement("a");
-  save.className = "secondary save-link";
-  save.href = url;
-  save.download = file.name;
-  save.textContent = "Save";
-
-  item.append(name, save);
   messages.appendChild(item);
   messages.scrollTop = messages.scrollHeight;
 }
