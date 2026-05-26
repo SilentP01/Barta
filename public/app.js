@@ -147,7 +147,7 @@ let isPolite = false;
 
 const rtcConfig = {
   iceServers: [
-    // Google STUN — 5 servers for maximum coverage
+    // Google STUN — 5 servers for redundancy
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
@@ -192,10 +192,12 @@ const rtcConfig = {
       credential: "free"
     }
   ],
-  iceCandidatePoolSize: 10,   // pre-gather candidates before call starts = faster connect
-  bundlePolicy: "max-bundle", // group all media on one transport = more compatible
-  rtcpMuxPolicy: "require"    // require RTCP multiplexing = better NAT traversal
+  // Pre-gathers ICE candidates before connection starts = faster handshake
+  // NOTE: bundlePolicy and rtcpMuxPolicy intentionally omitted — defaults are
+  // more universally compatible across browsers and network configurations
+  iceCandidatePoolSize: 10
 };
+
 
 
 function setNotice(text = "") {
