@@ -277,13 +277,6 @@
               <button class="secondary" type="submit" data-default-text="Send password link">Send password link</button>
             </form>
 
-            <div class="setting-toggle" style="margin-top: 16px;">
-              <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; color:var(--ink); cursor:pointer;">
-                <input type="checkbox" id="forceRelayToggle" />
-                Force Relay Mode (Fixes Hotspot/NAT issues)
-              </label>
-            </div>
-
             <p class="notice" id="profileNotice"></p>
           </div>
 
@@ -314,6 +307,7 @@
               <button class="back-btn" id="backBtn" type="button">&#8592;</button>
               <div>
                 <span class="muted" id="peerStatus">Connecting</span>
+                <span id="connTypeIndicator" class="conn-type-badge hidden"></span>
                 <h2 id="peerName"></h2>
               </div>
               <div class="peer-actions">
@@ -434,7 +428,7 @@
       </div>
     </div>
 
-    <script src="/app.js?v=37"></script>
+    <script src="/app.js?v=38"></script>
 
   </body>
 </html>

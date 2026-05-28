@@ -29,7 +29,7 @@ const forgotPasswordBtn = document.querySelector("#forgotPasswordBtn");
 const backToLoginBtn = document.querySelector("#backToLoginBtn");
 const resendVerifyBtn = document.querySelector("#resendVerifyBtn");
 const verifyBackBtn = document.querySelector("#verifyBackBtn");
-const forceRelayToggle = document.querySelector("#forceRelayToggle");
+const connTypeIndicator = document.querySelector("#connTypeIndicator");
 const searchForm = document.querySelector("#searchForm");
 const searchResult = document.querySelector("#searchResult");
 const userList = document.querySelector("#userList");
@@ -146,27 +146,32 @@ let makingOffer = false;
 let ignoreOffer = false;
 let isPolite = false;
 
-const rtcConfig = {
+// Phase 1: STUN only — tried first for every connection.
+// Uses zero TURN bandwidth. Works for ~75-80% of connections.
+const rtcConfigStun = {
   iceServers: [
-    // Use only ONE reliable STUN server. Using too many STUN servers at once
-    // causes a UDP flood that crashes mobile hotspots and strict NATs.
+    { urls: "stun:stun.l.google.com:19302" }
+  ]
+};
+
+// Phase 2: TURN added — only used if Phase 1 fails after 8 seconds.
+// Used for symmetric NAT, fiber ISPs, CGNAT (mobile carriers).
+const rtcConfigTurn = {
+  iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
-    
-    // TURN (openrelay — primary fallback)
+    // Primary TURN fallback
     {
       urls: "turn:openrelay.metered.ca:443",
       username: "openrelayproject",
       credential: "openrelayproject"
     },
-    // TURN (freestun — secondary fallback)
+    // Secondary TURN fallback
     {
       urls: "turn:freestun.net:3478",
       username: "free",
       credential: "free"
     }
   ]
-  // NOTE: iceCandidatePoolSize removed. Pre-gathering candidates aggressively
-  // creates too many concurrent UDP bindings and breaks mobile hotspots.
 };
 
 
@@ -427,13 +432,13 @@ function connectSocket() {
   });
 }
 
-async function startPeer(isInitiator) {
+async function startPeer(isInitiator, useTurn = false) {
   isPolite = !isInitiator;
   const queuedBeforeStart = pendingSignals;
   pendingSignals = [];
 
-  const isRelayMode = localStorage.getItem("barta-relay") === "1";
-  const config = isRelayMode ? { ...rtcConfig, iceTransportPolicy: "relay" } : rtcConfig;
+  // Phase 1: try STUN-only. Phase 2 (TURN) only if Phase 1 times out.
+  const config = useTurn ? rtcConfigTurn : rtcConfigStun;
   peer = new RTCPeerConnection(config);
 
   peer.onicecandidate = (event) => {
@@ -477,8 +482,58 @@ async function startPeer(isInitiator) {
 
   let disconnectTimer = null;
   let iceRestartTimer = null;
-  let wasConnected   = false; // true only after first successful "connected" state
-  let isRecovering   = false; // prevents duplicate recovery attempts + messages
+  let phase2Timer     = null; // fires if Phase 1 (STUN-only) doesn't connect in time
+  let wasConnected    = false;
+  let isRecovering    = false;
+
+  // ── Phase 2 escalation: destroy old peer, rebuild with TURN ──────────────
+  async function escalateToTurn() {
+    if (wasConnected || !currentPeer) return; // only escalate on initial failure
+    addSystemMessage("⏳ Direct connection failed — trying relay…");
+    if (connTypeIndicator) {
+      connTypeIndicator.textContent = "⏳ Connecting via relay…";
+      connTypeIndicator.className = "conn-type-badge relaying";
+      connTypeIndicator.classList.remove("hidden");
+    }
+    // Tear down Phase 1 peer silently
+    peer.onconnectionstatechange = null;
+    peer.onicecandidate = null;
+    peer.onnegotiationneeded = null;
+    peer.close();
+    // Rebuild with TURN and restart full handshake
+    await startPeer(isInitiator, true);
+  }
+
+  // ── Kick off Phase 2 timer: 8 seconds to connect via STUN ────────────────
+  if (!useTurn) {
+    phase2Timer = setTimeout(() => {
+      if (!wasConnected && currentPeer) escalateToTurn();
+    }, 8000);
+  }
+
+  // ── Show connection type after connected ──────────────────────────────────
+  async function showConnType() {
+    try {
+      const stats = await peer.getStats();
+      let candidateType = "host";
+      stats.forEach(report => {
+        if (report.type === "candidate-pair" && report.state === "succeeded" && report.nominated) {
+          const local = stats.get(report.localCandidateId);
+          if (local) candidateType = local.candidateType;
+        }
+      });
+      if (connTypeIndicator) {
+        if (candidateType === "relay") {
+          connTypeIndicator.textContent = "🔁 Relayed";
+          connTypeIndicator.className = "conn-type-badge relayed";
+        } else {
+          connTypeIndicator.textContent = "🔒 Direct";
+          connTypeIndicator.className = "conn-type-badge direct";
+        }
+        connTypeIndicator.classList.remove("hidden");
+      }
+    } catch (e) {}
+  }
 
   peer.onconnectionstatechange = () => {
     const state = peer.connectionState;
@@ -486,9 +541,12 @@ async function startPeer(isInitiator) {
     if (state === "connected") {
       wasConnected = true;
       isRecovering = false;
-      // Clear all recovery timers — connection is healthy
+      // Cancel Phase 2 timer — connected via STUN (Phase 1 won)
+      if (phase2Timer) { clearTimeout(phase2Timer); phase2Timer = null; }
       if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
       if (iceRestartTimer) { clearTimeout(iceRestartTimer); iceRestartTimer = null; }
+      // Show which path was used
+      showConnType();
       // Show "restored" message only if we were recovering
       const lastMsg = messages?.lastElementChild;
       if (lastMsg?.textContent?.includes("reconnecting") || lastMsg?.textContent?.includes("recovery")) {
@@ -528,8 +586,15 @@ async function startPeer(isInitiator) {
       if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
 
       if (!wasConnected) {
-        // Initial handshake failed — ICE restart is pointless here, just reset cleanly
-        if (currentPeer) { sendSocket("disconnect-peer"); resetPeer("Failed to connect"); }
+        // Initial handshake failed
+        if (phase2Timer) { clearTimeout(phase2Timer); phase2Timer = null; }
+        if (!useTurn) {
+          // Phase 1 hard-failed — escalate to TURN immediately, don't wait
+          if (currentPeer) escalateToTurn();
+        } else {
+          // Phase 2 also failed — give up
+          if (currentPeer) { sendSocket("disconnect-peer"); resetPeer("Failed to connect"); }
+        }
         return;
       }
 
@@ -1403,20 +1468,6 @@ profileBtn.addEventListener("click", async () => {
 });
 
 closeProfileBtn.addEventListener("click", () => profilePanel.classList.add("hidden"));
-
-// Force Relay toggle
-if (forceRelayToggle) {
-  forceRelayToggle.checked = localStorage.getItem("barta-relay") === "1";
-  forceRelayToggle.addEventListener("change", (e) => {
-    if (e.target.checked) {
-      localStorage.setItem("barta-relay", "1");
-      setProfileNotice("Relay Mode ON. (Requires reconnect)");
-    } else {
-      localStorage.setItem("barta-relay", "0");
-      setProfileNotice("Relay Mode OFF. (Requires reconnect)");
-    }
-  });
-}
 
 profileEmailForm.addEventListener("submit", async (event) => {
   event.preventDefault();
