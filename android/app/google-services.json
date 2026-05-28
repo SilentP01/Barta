@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "84945489568",
+    "project_id": "barta-21514",
+    "storage_bucket": "barta-21514.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:84945489568:android:ef6c9097aead9a055d03c5",
+        "android_client_info": {
+          "package_name": "app.barta.messenger"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBgB7r_jtBO474LyutUF_sl7f9RQdENHWI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,428 +1,63 @@
 package app.barta.messenger
 
-import android.Manifest
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.os.Environment
-import android.provider.MediaStore
 import android.view.WindowManager
-import android.webkit.*
-import androidx.activity.OnBackPressedCallback
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
-import androidx.core.net.toUri
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.concurrent.thread
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.rememberNavController
+import app.barta.messenger.data.model.Result
+import app.barta.messenger.data.repository.AuthRepository
+import app.barta.messenger.navigation.BartaNavGraph
+import app.barta.messenger.navigation.Screen
+import app.barta.messenger.ui.theme.BartaTheme
+import app.barta.messenger.viewmodel.AuthViewModel
 
-class MainActivity : AppCompatActivity() {
-
-    private lateinit var webView: WebView
-    private val baseUrl = "https://barta.up.railway.app/"
-    var isCallActive = false
-    private var fileChooserCallback: ValueCallback<Array<android.net.Uri>>? = null
-    private var cameraImageUri: Uri? = null
-
-    companion object {
-        const val REQ_GALLERY  = 101
-        const val REQ_CAMERA   = 102
-        const val REQ_DOCUMENT = 103
-        const val REQ_AUDIO    = 104
-        const val REQ_FILECHOOSER = 100
-        const val REQ_PERMISSIONS = 200
-    }
-
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
-        
-        // NATIVE PRIVACY: This blocks screenshots and screen recording globally in the app
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE,
-        )
 
-        webView = WebView(this)
-        setContentView(webView)
+        // Block screenshots and screen recording for privacy
+        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
 
-        // BUG-10: Use modern OnBackPressedDispatcher instead of deprecated onBackPressed()
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (webView.canGoBack()) {
-                    webView.goBack()
-                } else {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
-                }
-            }
-        })
+        enableEdgeToEdge()
+        WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        setupWebView()
-        checkPermissions()
-        checkForUpdates()
-    }
+        setContent {
+            BartaTheme {
+                val navController  = rememberNavController()
+                val authViewModel: AuthViewModel = viewModel()
+                var startDest by remember { mutableStateOf(Screen.Splash.route) }
+                var ready     by remember { mutableStateOf(false) }
 
-    inner class BartaBridge {
-        @android.webkit.JavascriptInterface
-        fun setCallActive(isActive: Boolean) {
-            runOnUiThread { isCallActive = isActive }
-        }
+                // Hold splash until session check completes
+                splashScreen.setKeepOnScreenCondition { !ready }
 
-        @android.webkit.JavascriptInterface
-        fun openGallery() {
-            val intent = Intent(Intent.ACTION_PICK).apply {
-                type = "image/* video/*"
-                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
-            }
-            runOnUiThread { startActivityForResult(intent, REQ_GALLERY) }
-        }
-
-        @android.webkit.JavascriptInterface
-        fun openCamera() {
-            runOnUiThread {
-                try {
-                    val photoFile = createImageFile()
-                    cameraImageUri = FileProvider.getUriForFile(
-                        this@MainActivity,
-                        "${packageName}.provider",
-                        photoFile
-                    )
-                    val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
-                        putExtra(MediaStore.EXTRA_OUTPUT, cameraImageUri)
-                    }
-                    startActivityForResult(intent, REQ_CAMERA)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        }
-
-        @android.webkit.JavascriptInterface
-        fun openDocument() {
-            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                addCategory(Intent.CATEGORY_OPENABLE)
-                type = "*/*"
-            }
-            runOnUiThread { startActivityForResult(intent, REQ_DOCUMENT) }
-        }
-
-        @android.webkit.JavascriptInterface
-        fun openAudio() {
-            val intent = Intent(Intent.ACTION_PICK).apply {
-                type = "audio/*"
-            }
-            runOnUiThread { startActivityForResult(intent, REQ_AUDIO) }
-        }
-
-        @android.webkit.JavascriptInterface
-        fun checkUpdateRequired(latestVersionCode: Int) {
-            val pInfo = packageManager.getPackageInfo(packageName, 0)
-            val installed = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
-                pInfo.longVersionCode else pInfo.versionCode.toLong()
-            if (latestVersionCode > installed) {
-                runOnUiThread { showUpdateDialog() }
-            }
-        }
-    }
-
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-        if (isCallActive) {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                val rational = android.util.Rational(9, 16)
-                val params = android.app.PictureInPictureParams.Builder()
-                    .setAspectRatio(rational)
-                    .build()
-                enterPictureInPictureMode(params)
-            } else {
-                @Suppress("DEPRECATION")
-                enterPictureInPictureMode()
-            }
-        }
-    }
-
-    override fun onPictureInPictureModeChanged(
-        isInPictureInPictureMode: Boolean,
-        newConfig: android.content.res.Configuration
-    ) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        webView.evaluateJavascript("javascript:if(window.onPipModeChanged){window.onPipModeChanged($isInPictureInPictureMode);}", null)
-    }
-
-    private fun setupWebView() {
-        val defaultUserAgent = webView.settings.userAgentString ?: ""
-        webView.settings.userAgentString = "$defaultUserAgent BartaNativeAndroid"
-
-        webView.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            mediaPlaybackRequiresUserGesture = false
-            allowFileAccess = true
-            allowContentAccess = true
-            databaseEnabled = true
-            // Important for WebRTC
-            setSupportMultipleWindows(true)
-            javaScriptCanOpenWindowsAutomatically = true
-        }
-
-        webView.addJavascriptInterface(BartaBridge(), "BartaBridge")
-
-        webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                val url = request.url.toString()
-                return if (url.startsWith(baseUrl)) {
-                    false
-                } else {
-                    // Open external links in browser
-                    startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-                    true
-                }
-            }
-
-            override fun onReceivedError(
-                view: WebView?,
-                request: WebResourceRequest?,
-                error: WebResourceError?
-            ) {
-                super.onReceivedError(view, request, error)
-                if (request?.isForMainFrame == true) {
-                    val offlineHtml = """
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                          <style>
-                            body {
-                              background: #0f1117;
-                              color: #ffffff;
-                              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                              display: flex;
-                              flex-direction: column;
-                              align-items: center;
-                              justify-content: center;
-                              height: 100vh;
-                              margin: 0;
-                              text-align: center;
-                              padding: 24px;
-                              box-sizing: border-box;
-                            }
-                            .icon {
-                              font-size: 3rem;
-                              margin-bottom: 16px;
-                              animation: pulse 2s infinite ease-in-out;
-                            }
-                            h1 {
-                              font-size: 1.5rem;
-                              font-weight: 700;
-                              margin: 0 0 10px 0;
-                              letter-spacing: -0.02em;
-                            }
-                            p {
-                              font-size: 0.95rem;
-                              color: #94a3b8;
-                              margin: 0 0 28px 0;
-                              line-height: 1.6;
-                              max-width: 320px;
-                            }
-                            .btn {
-                              background: #14b8a6;
-                              color: #ffffff;
-                              border: none;
-                              padding: 14px 28px;
-                              border-radius: 999px;
-                              font-weight: 700;
-                              font-size: 0.9rem;
-                              cursor: pointer;
-                              box-shadow: 0 4px 14px rgba(20, 184, 166, 0.35);
-                            }
-                            @keyframes pulse {
-                              0%, 100% { opacity: 0.5; }
-                              50% { opacity: 1; }
-                            }
-                          </style>
-                        </head>
-                        <body>
-                          <div class="icon">📡</div>
-                          <h1>Connection Unavailable</h1>
-                          <p>Barta requires an active network to authenticate and secure your private sessions. Please check your cellular data or Wi-Fi settings.</p>
-                          <button class="btn" onclick="location.href='$baseUrl'">Retry Connection</button>
-                        </body>
-                        </html>
-                    """.trimIndent()
-                    view?.loadDataWithBaseURL(null, offlineHtml, "text/html", "UTF-8", null)
-                }
-            }
-        }
-
-        webView.webChromeClient = object : WebChromeClient() {
-            // Handle WebRTC permissions inside WebView
-            override fun onPermissionRequest(request: PermissionRequest) {
-                runOnUiThread {
-                    request.grant(request.resources)
-                }
-            }
-
-            // Handle file uploads
-            override fun onShowFileChooser(
-                webView: WebView?,
-                filePathCallback: ValueCallback<Array<android.net.Uri>>?,
-                fileChooserParams: FileChooserParams?
-            ): Boolean {
-                fileChooserCallback?.onReceiveValue(null)
-                fileChooserCallback = filePathCallback
-
-                val intent = fileChooserParams?.createIntent()
-                try {
-                    startActivityForResult(intent!!, 100)
-                } catch (e: Exception) {
-                    fileChooserCallback = null
-                    return false
-                }
-                return true
-            }
-        }
-
-        webView.loadUrl(baseUrl)
-    }
-
-    private fun checkPermissions() {
-        val permissions = mutableListOf(
-            Manifest.permission.CAMERA,
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.MODIFY_AUDIO_SETTINGS,
-        )
-        // Android 13+: granular media permissions
-        if (Build.VERSION.SDK_INT >= 33) {
-            permissions += listOf(
-                Manifest.permission.READ_MEDIA_IMAGES,
-                Manifest.permission.READ_MEDIA_VIDEO,
-                Manifest.permission.READ_MEDIA_AUDIO
-            )
-        } else {
-            // Android 9-12
-            permissions += Manifest.permission.READ_EXTERNAL_STORAGE
-        }
-        val missing = permissions.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (missing.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, missing.toTypedArray(), REQ_PERMISSIONS)
-        }
-    }
-
-    private fun createImageFile(): File {
-        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val storageDir = cacheDir
-        return File.createTempFile("BARTA_${stamp}_", ".jpg", storageDir)
-    }
-
-    private fun dispatchFileToWeb(uri: Uri, requestCode: Int) {
-        try {
-            val cr = contentResolver
-            val mimeType = cr.getType(uri) ?: "application/octet-stream"
-            val cursor = cr.query(uri, arrayOf(
-                android.provider.OpenableColumns.DISPLAY_NAME,
-                android.provider.OpenableColumns.SIZE
-            ), null, null, null)
-            var name = "file"
-            var size = 0L
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    name = it.getString(0) ?: name
-                    size = it.getLong(1)
-                }
-            }
-            val uriStr = uri.toString()
-            val js = "window._bartaFileReady && window._bartaFileReady('${uriStr.replace("'", "\\'")}',' ${name.replace("'", "\\'")}'.trim(),'$mimeType',$size)"
-            runOnUiThread { webView.evaluateJavascript(js, null) }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    private fun checkForUpdates() {
-        thread {
-            try {
-                val conn = java.net.URL("${baseUrl}api/version").openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = 5_000
-                conn.readTimeout = 5_000
-                val response = conn.inputStream.bufferedReader().readText()
-                conn.disconnect()
-                val json = org.json.JSONObject(response)
-                val serverVersionCode = json.optInt("latestVersionCode", 1)
-
-                val pInfo = packageManager.getPackageInfo(packageName, 0)
-                val localVersionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                    pInfo.longVersionCode
-                } else {
-                    @Suppress("DEPRECATION")
-                    pInfo.versionCode.toLong()
+                LaunchedEffect(Unit) {
+                    val result = AuthRepository(applicationContext).checkSession()
+                    startDest = if (result is Result.Success) Screen.Home.route else Screen.Login.route
+                    ready = true
                 }
 
-                if (serverVersionCode > localVersionCode) {
-                    runOnUiThread {
-                        showUpdateDialog()
+                if (ready) {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        BartaNavGraph(
+                            navController    = navController,
+                            startDestination = startDest,
+                            authViewModel    = authViewModel
+                        )
                     }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
-        }
-    }
-
-    internal fun showUpdateDialog() {
-        if (isDestroyed || isFinishing) return
-
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Update Available")
-            .setMessage("A new, secure version of Barta is available. Please update for the latest features and security improvements.")
-            .setCancelable(true)
-            .setPositiveButton("Update Now") { _, _ ->
-                val updateUrl = "https://github.com/SilentP01/Barta/releases/latest/download/Barta.apk"
-                startActivity(Intent(Intent.ACTION_VIEW, updateUrl.toUri()))
-            }
-            .setNegativeButton("Later") { dialog, _ ->
-                dialog.dismiss()
-            }
-            .show()
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        when (requestCode) {
-            REQ_GALLERY, REQ_DOCUMENT, REQ_AUDIO -> {
-                if (resultCode == RESULT_OK) {
-                    val uri = data?.data
-                    if (uri != null) dispatchFileToWeb(uri, requestCode)
-                }
-            }
-            REQ_CAMERA -> {
-                if (resultCode == RESULT_OK) {
-                    val uri = cameraImageUri
-                    if (uri != null) dispatchFileToWeb(uri, requestCode)
-                }
-                cameraImageUri = null
-            }
-            REQ_FILECHOOSER -> {
-                var results: Array<Uri>? = null
-                if (resultCode == RESULT_OK && data != null) {
-                    val dataString = data.dataString
-                    val clipData = data.clipData
-                    if (clipData != null) {
-                        results = Array(clipData.itemCount) { i -> clipData.getItemAt(i).uri }
-                    } else if (dataString != null) {
-                        results = arrayOf(Uri.parse(dataString))
-                    }
-                }
-                fileChooserCallback?.onReceiveValue(results)
-                fileChooserCallback = null
-            }
-            else -> super.onActivityResult(requestCode, resultCode, data)
         }
     }
 }

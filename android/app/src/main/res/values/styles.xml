@@ -1,7 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Barta" parent="Theme.AppCompat.DayNight.NoActionBar">
-        <item name="colorPrimary">#14b8a6</item>
-        <item name="colorPrimaryDark">#0f1117</item>
-        <item name="colorAccent">#f2b84b</item>
+    <!-- Base theme — used by Compose, sets up the splash screen -->
+    <style name="Theme.SplashScreen" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#0F1117</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.Barta</item>
+    </style>
+
+    <!-- Post-splash Compose theme (transparent activity background) -->
+    <style name="Theme.Barta" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#0F1117</item>
+        <item name="android:statusBarColor">#00000000</item>
+        <item name="android:navigationBarColor">#00000000</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>
