@@ -30,6 +30,9 @@ const backToLoginBtn = document.querySelector("#backToLoginBtn");
 const resendVerifyBtn = document.querySelector("#resendVerifyBtn");
 const verifyBackBtn = document.querySelector("#verifyBackBtn");
 const connTypeIndicator = document.querySelector("#connTypeIndicator");
+const activeChatBanner  = document.querySelector("#activeChatBanner");
+
+// App UI
 const searchForm = document.querySelector("#searchForm");
 const searchResult = document.querySelector("#searchResult");
 const userList = document.querySelector("#userList");
@@ -231,6 +234,25 @@ function showLanding() {
 function showSidebar() {
   sidebar.classList.remove("slide-out");
   workspace.classList.remove("slide-in");
+  // If currently connected, show a pinned active-chat row so user can tap back in
+  if (activeChatBanner) {
+    if (currentPeer) {
+      activeChatBanner.innerHTML = `
+        <div class="active-chat-row" id="activeChatRow">
+          <div class="active-chat-avatar">${escapeHtml(currentPeer.username[0].toUpperCase())}</div>
+          <div class="active-chat-info">
+            <span class="active-chat-name">@${escapeHtml(currentPeer.username)}</span>
+            <span class="active-chat-status">Connected • Tap to return</span>
+          </div>
+          <svg class="active-chat-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>`;
+      activeChatBanner.classList.remove("hidden");
+      document.getElementById("activeChatRow")?.addEventListener("click", showWorkspace);
+    } else {
+      activeChatBanner.innerHTML = "";
+      activeChatBanner.classList.add("hidden");
+    }
+  }
 }
 
 function showWorkspace() {
@@ -383,6 +405,13 @@ function resetPeer(note = "Disconnected") {
   hideCallRequestPopup();
   if (messages) messages.innerHTML = "";
   setComposerReady(false);
+  // Hide active chat banner since no longer connected
+  if (activeChatBanner) {
+    activeChatBanner.innerHTML = "";
+    activeChatBanner.classList.add("hidden");
+  }
+  // Hide connection type badge
+  if (connTypeIndicator) connTypeIndicator.classList.add("hidden");
   peerView.classList.add("hidden");
   emptyState.classList.remove("hidden");
   addSystemMessage(note);
