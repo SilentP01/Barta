@@ -1,8 +1,18 @@
 package app.barta.messenger.data.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
-// ── WebSocket message envelope ────────────────────────────────────────────────
+// ── WebRTC signal envelope ────────────────────────────────────────────────────
+@Serializable
+data class RtcSignal(
+    val type: String,             // "offer" | "answer" | "candidate"
+    val sdp: String? = null,      // for offer / answer
+    val candidate: String? = null,// for candidate
+    val sdpMid: String? = null,
+    val sdpMLineIndex: Int? = null
+)
+
 @Serializable
 data class WsMessage(
     val type: String,

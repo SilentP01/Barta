@@ -54,18 +54,25 @@ class SocketClient {
     }
 
     fun sendRaw(type: String, extra: Map<String, Any> = emptyMap()) {
-        val map = mutableMapOf<String, Any>("type" to type)
-        map.putAll(extra)
-        // Build minimal JSON manually for simple messages
-        val pairs = map.entries.joinToString(",") { (k, v) ->
+        val pairs = (mapOf("type" to type) + extra).entries.joinToString(",") { (k, v) ->
             when (v) {
-                is String  -> "\"$k\":\"$v\""
+                is String  -> "\"$k\":\"${v.replace("\"", "\\\"")}\""
                 is Boolean -> "\"$k\":$v"
                 is Number  -> "\"$k\":$v"
                 else       -> "\"$k\":\"$v\""
             }
         }
         ws?.send("{$pairs}")
+    }
+
+    /** Send a signal (SDP offer/answer or ICE candidate) through the WebSocket. */
+    fun sendSignal(signalJson: String) {
+        ws?.send("""{"type":"signal","signal":$signalJson}""")
+    }
+
+    /** Send any raw JSON string directly. */
+    fun sendJson(json: String) {
+        ws?.send(json)
     }
 
     private fun doConnect() {

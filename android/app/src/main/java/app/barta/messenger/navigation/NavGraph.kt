@@ -1,6 +1,8 @@
 package app.barta.messenger.navigation
 
+import android.app.Application
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -11,9 +13,11 @@ import app.barta.messenger.ui.screens.SplashScreen
 import app.barta.messenger.ui.screens.auth.LoginScreen
 import app.barta.messenger.ui.screens.auth.SignupScreen
 import app.barta.messenger.ui.screens.auth.VerifyEmailScreen
+import app.barta.messenger.ui.screens.chat.ChatScreen
 import app.barta.messenger.ui.screens.home.HomeScreen
 import app.barta.messenger.ui.screens.profile.ProfileScreen
 import app.barta.messenger.viewmodel.AuthViewModel
+import app.barta.messenger.viewmodel.ChatViewModelFactory
 import app.barta.messenger.viewmodel.HomeViewModel
 
 sealed class Screen(val route: String) {
@@ -24,14 +28,14 @@ sealed class Screen(val route: String) {
         fun createRoute(email: String) = "verify/$email"
     }
     object Home         : Screen("home")
-    object Chat         : Screen("chat/{peerId}/{peerName}") {
-        fun createRoute(peerId: Int, peerName: String) = "chat/$peerId/$peerName"
+    object Chat         : Screen("chat/{peerId}/{peerName}/{peerAvatar}/{initiator}") {
+        fun createRoute(peer: OnlineUser, initiator: Boolean) =
+            "chat/${peer.id}/${peer.username}/${(peer.avatarUrl ?: "null")}/$initiator"
     }
     object Profile      : Screen("profile")
     object IncomingCall : Screen("incoming_call/{callerName}") {
         fun createRoute(name: String) = "incoming_call/$name"
     }
-    object ActiveCall   : Screen("active_call")
 }
 
 @Composable
@@ -40,11 +44,11 @@ fun BartaNavGraph(
     startDestination: String,
     authViewModel: AuthViewModel
 ) {
-    // Shared HomeViewModel scoped to the nav graph so it survives Home ↔ Profile navigation
     val homeViewModel: HomeViewModel = viewModel()
 
     NavHost(navController = navController, startDestination = startDestination) {
 
+        // ── Splash ────────────────────────────────────────────────────────────
         composable(Screen.Splash.route) { SplashScreen() }
 
         // ── Auth ──────────────────────────────────────────────────────────────
@@ -87,16 +91,39 @@ fun BartaNavGraph(
         composable(Screen.Home.route) {
             HomeScreen(
                 viewModel = homeViewModel,
-                onNavigateToChat = { peer ->
-                    navController.navigate(Screen.Chat.createRoute(peer.id, peer.username))
+                onNavigateToChat = { peer, initiator ->
+                    navController.navigate(Screen.Chat.createRoute(peer, initiator)) {
+                        launchSingleTop = true
+                    }
                 },
                 onNavigateToProfile = { navController.navigate(Screen.Profile.route) },
                 onLogout = {
                     authViewModel.logout()
                     socketClient.disconnect()
                     navController.navigate(Screen.Login.route) {
-                        popUpTo(Screen.Home.route) { inclusive = true }
+                        popUpTo(0) { inclusive = true }
                     }
+                }
+            )
+        }
+
+        // ── Chat ──────────────────────────────────────────────────────────────
+        composable(Screen.Chat.route) { back ->
+            val app      = LocalContext.current.applicationContext as Application
+            val peerId   = back.arguments?.getString("peerId")?.toIntOrNull() ?: -1
+            val peerName = back.arguments?.getString("peerName") ?: ""
+            val avatar   = back.arguments?.getString("peerAvatar")?.takeIf { it != "null" }
+            val initiator = back.arguments?.getString("initiator")?.toBoolean() ?: false
+            val peer = OnlineUser(id = peerId, username = peerName, status = "connected", avatarUrl = avatar)
+
+            val chatViewModel = viewModel(
+                factory = ChatViewModelFactory(app, peer, initiator)
+            )
+            ChatScreen(
+                viewModel = chatViewModel,
+                onBack = {
+                    navController.popBackStack()
+                    homeViewModel.disconnectPeer()
                 }
             )
         }
@@ -113,14 +140,6 @@ fun BartaNavGraph(
                     }
                 }
             )
-        }
-
-        // ── Chat — Phase 3 placeholder ────────────────────────────────────────
-        composable(Screen.Chat.route) { back ->
-            val peerId   = back.arguments?.getString("peerId")?.toIntOrNull() ?: -1
-            val peerName = back.arguments?.getString("peerName") ?: "Unknown"
-            // TODO Phase 3: ChatScreen(peerId, peerName, homeViewModel)
-            SplashScreen()
         }
     }
 }

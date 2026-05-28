@@ -13,7 +13,12 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
 
-val json = Json { ignoreUnknownKeys = true; isLenient = true }
+val json = Json {
+    ignoreUnknownKeys = true
+    isLenient = true
+    encodeDefaults = false
+    explicitNulls = false
+}
 val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
 class MemoryCookieJar : CookieJar {

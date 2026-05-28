@@ -35,7 +35,7 @@ import app.barta.messenger.viewmodel.HomeViewModel
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = viewModel(),
-    onNavigateToChat: (OnlineUser) -> Unit,
+    onNavigateToChat: (OnlineUser, Boolean) -> Unit,
     onNavigateToProfile: () -> Unit,
     onLogout: () -> Unit
 ) {
@@ -52,17 +52,17 @@ fun HomeScreen(
             callerName = from.username,
             onAccept = {
                 viewModel.acceptRequest()
-                onNavigateToChat(from)
+                onNavigateToChat(from, false) // receiver = not initiator
             },
             onReject = viewModel::rejectRequest
         )
     }
 
-    // Navigate to chat once connected
+    // Navigate to chat once connected (initiator path)
     LaunchedEffect(connState) {
         if (connState is ConnectionState.Connected) {
             val state = connState as ConnectionState.Connected
-            onNavigateToChat(state.peer)
+            onNavigateToChat(state.peer, state.initiator)
         }
     }
 
