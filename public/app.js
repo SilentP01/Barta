@@ -1755,9 +1755,10 @@ window.addEventListener("popstate", () => {
       if (knownHash === null) { knownHash = hash; return; }
       if (hash !== knownHash) {
         knownHash = hash;
-        if (isNativeBarta && window.BartaBridge?.triggerNativeUpdate) {
-          window.BartaBridge.triggerNativeUpdate();
-        } else {
+        // Only show reload banner for web users.
+        // Android users get update notifications from the native checkForUpdates()
+        // which compares APK versionCode correctly (no false positives).
+        if (!isNativeBarta) {
           banner?.classList.remove("hidden");
         }
       }

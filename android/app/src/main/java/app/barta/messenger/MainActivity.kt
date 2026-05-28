@@ -50,18 +50,11 @@ class MainActivity : AppCompatActivity() {
         checkForUpdates()
     }
 
-    class BartaBridge(val activity: MainActivity) {
+    inner class BartaBridge {
         @android.webkit.JavascriptInterface
         fun setCallActive(isActive: Boolean) {
-            activity.runOnUiThread {
-                activity.isCallActive = isActive
-            }
-        }
-        
-        @android.webkit.JavascriptInterface
-        fun triggerNativeUpdate() {
-            activity.runOnUiThread {
-                activity.showUpdateDialog()
+            runOnUiThread {
+                isCallActive = isActive
             }
         }
     }
@@ -106,7 +99,7 @@ class MainActivity : AppCompatActivity() {
             javaScriptCanOpenWindowsAutomatically = true
         }
 
-        webView.addJavascriptInterface(BartaBridge(this), "BartaBridge")
+        webView.addJavascriptInterface(BartaBridge(), "BartaBridge")
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -270,12 +263,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showUpdateDialog() {
+    internal fun showUpdateDialog() {
         if (isDestroyed || isFinishing) return
 
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("Update Available")
-            .setMessage("A new, secure version of Barta is available. To ensure the highest level of privacy protection and optimal performance, please update your application.")
+            .setMessage("A new, secure version of Barta is available. Please update for the latest features and security improvements.")
             .setCancelable(true)
             .setPositiveButton("Update Now") { _, _ ->
                 val updateUrl = "https://github.com/SilentP01/Barta/releases/latest/download/Barta.apk"
