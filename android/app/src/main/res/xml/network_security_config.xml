@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+        HTTPS-only policy for Barta.
+        All connections must use TLS. No cleartext (HTTP) allowed.
+        The server at barta.up.railway.app uses a valid CA-signed cert,
+        so no custom trust anchors are needed.
+    -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <!-- Trust standard system CAs (covers Railway / Cloudinary / FCM) -->
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

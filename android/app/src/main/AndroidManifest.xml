@@ -10,11 +10,11 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
-    <!-- Storage: Android 9-12 (legacy) -->
+    <!-- Storage: Android 9–12 (legacy) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-    <!-- Storage: Android 13+ (granular media permissions) -->
+    <!-- Storage: Android 13+ (granular) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
@@ -22,7 +22,7 @@
     <!-- Notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Foreground service for call background -->
+    <!-- Foreground service for background calls -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
@@ -32,10 +32,10 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
-    <!-- Hardware features (optional) -->
-    <uses-feature android:name="android.hardware.camera"          android:required="false" />
+    <!-- Hardware features (all optional so app installs on devices without front camera etc.) -->
+    <uses-feature android:name="android.hardware.camera"           android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
-    <uses-feature android:name="android.hardware.microphone"      android:required="false" />
+    <uses-feature android:name="android.hardware.microphone"       android:required="false" />
 
     <application
         android:name=".BartaApplication"
@@ -44,7 +44,8 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SplashScreen"
+        android:theme="@style/Theme.Barta.Splash"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:usesCleartextTraffic="false">
 
         <activity
@@ -59,7 +60,7 @@
             </intent-filter>
         </activity>
 
-        <!-- FileProvider for camera captures -->
+        <!-- FileProvider for camera captures (used in Phase 3 file sharing) -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"

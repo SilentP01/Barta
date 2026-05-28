@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Base theme — used by Compose, sets up the splash screen -->
-    <style name="Theme.SplashScreen" parent="Theme.SplashScreen">
+    <!-- Splash screen theme - note: parent must be Theme.SplashScreen from the library -->
+    <style name="Theme.Barta.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#0F1117</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
         <item name="postSplashScreenTheme">@style/Theme.Barta</item>
     </style>
 
-    <!-- Post-splash Compose theme (transparent activity background) -->
+    <!-- Post-splash theme used by Compose (no title bar, transparent system bars) -->
     <style name="Theme.Barta" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">#0F1117</item>
         <item name="android:statusBarColor">#00000000</item>
