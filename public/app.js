@@ -91,6 +91,27 @@ const mvZoomOut   = document.querySelector("#mvZoomOut");
 const mvZoomFit   = document.querySelector("#mvZoomFit");
 const mvZoomPct   = document.querySelector("#mvZoomPct");
 
+// Attach sheet elements
+const attachBtn      = document.querySelector("#attachBtn");
+const attachSheet    = document.querySelector("#attachSheet");
+const attachBackdrop = document.querySelector("#attachBackdrop");
+const attachPhoto    = document.querySelector("#attachPhoto");
+const attachCamera   = document.querySelector("#attachCamera");
+const attachVideo    = document.querySelector("#attachVideo");
+const attachAudio    = document.querySelector("#attachAudio");
+const attachDoc      = document.querySelector("#attachDoc");
+const fileInputImage = document.querySelector("#fileInputImage");
+const fileInputAudio = document.querySelector("#fileInputAudio");
+const fileInputDoc   = document.querySelector("#fileInputDoc");
+
+// File pending preview bar elements
+const filePendingBar = document.querySelector("#filePendingBar");
+const fpbPreview     = document.querySelector("#fpbPreview");
+const fpbName        = document.querySelector("#fpbName");
+const fpbSize        = document.querySelector("#fpbSize");
+const fpbCancel      = document.querySelector("#fpbCancel");
+const fpbSend        = document.querySelector("#fpbSend");
+
 const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const isNativeBarta = navigator.userAgent.includes("BartaNativeAndroid");
 
@@ -420,12 +441,17 @@ function resetPeer(note = "Disconnected") {
 
 function setComposerReady(isReady) {
   messageInput.disabled = !isReady;
-  fileBtn.disabled = !isReady;
-  sendBtn.disabled = !isReady;
+  attachBtn.disabled    = !isReady;
+  sendBtn.disabled      = !isReady;
   startCallBtn.disabled = !isReady;
   startAudioBtn.disabled = !isReady;
+  if (attachPhoto)  attachPhoto.disabled  = !isReady;
+  if (attachCamera) attachCamera.disabled = !isReady;
+  if (attachVideo)  attachVideo.disabled  = !isReady;
+  if (attachAudio)  attachAudio.disabled  = !isReady;
+  if (attachDoc)    attachDoc.disabled    = !isReady;
   messageInput.placeholder = isReady ? "Message" : "Waiting for peer connection";
-  peerStatus.textContent = isReady ? "CONNECTED WITH" : "CONNECTING";
+  peerStatus.textContent   = isReady ? "CONNECTED WITH" : "CONNECTING";
 }
 
 function connectSocket() {
@@ -1569,12 +1595,146 @@ messageForm.addEventListener("submit", (event) => {
   }
 });
 
-fileBtn.addEventListener("click", () => fileInput.click());
-fileInput.addEventListener("change", () => {
-  const file = fileInput.files[0];
-  if (file) sendFile(file);
-  fileInput.value = "";
+// ─── ATTACH SHEET ──────────────────────────────────────────────────────────────
+let pendingFile = null; // { file | uri, name, mimeType, size }
+
+function openAttachSheet() {
+  attachSheet.classList.remove("hidden");
+  attachBackdrop.classList.remove("hidden");
+  requestAnimationFrame(() => attachSheet.classList.add("open"));
+}
+
+function closeAttachSheet() {
+  attachSheet.classList.remove("open");
+  attachBackdrop.classList.add("hidden");
+  setTimeout(() => attachSheet.classList.add("hidden"), 280);
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+function showFilePendingBar(file) {
+  pendingFile = file;
+  fpbName.textContent = file.name;
+  fpbSize.textContent = formatBytes(file.size);
+  fpbPreview.innerHTML = "";
+
+  if (file.type.startsWith("image/")) {
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(file);
+    img.className = "fpb-thumb";
+    fpbPreview.appendChild(img);
+  } else {
+    const icon = document.createElement("div");
+    icon.className = "fpb-file-icon";
+    icon.textContent = file.type.startsWith("audio/") ? "🎵" :
+                       file.type.startsWith("video/") ? "🎬" : "📄";
+    fpbPreview.appendChild(icon);
+  }
+
+  filePendingBar.classList.remove("hidden");
+}
+
+function clearPendingFile() {
+  pendingFile = null;
+  filePendingBar.classList.add("hidden");
+  fpbPreview.innerHTML = "";
+  fileInputImage.value = "";
+  fileInputAudio.value = "";
+  fileInputDoc.value   = "";
+}
+
+// Android native callback — called by webView.evaluateJavascript from Kotlin
+window._bartaFileReady = async function(uriStr, name, mimeType, size) {
+  closeAttachSheet();
+  try {
+    // Fetch the content:// URI as a Blob inside the WebView
+    const response = await fetch(uriStr);
+    const blob = await response.blob();
+    const file = new File([blob], name.trim(), { type: mimeType || blob.type });
+    showFilePendingBar(file);
+  } catch (e) {
+    addSystemMessage("⚠️ Could not load file. Try again.");
+  }
+};
+
+attachBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  openAttachSheet();
 });
+
+attachBackdrop.addEventListener("click", closeAttachSheet);
+
+// Photo / Video — gallery picker
+attachPhoto.addEventListener("click", () => {
+  closeAttachSheet();
+  if (isNativeBarta && window.BartaBridge?.openGallery) {
+    window.BartaBridge.openGallery();
+  } else {
+    fileInputImage.click();
+  }
+});
+
+// Camera
+attachCamera.addEventListener("click", () => {
+  closeAttachSheet();
+  if (isNativeBarta && window.BartaBridge?.openCamera) {
+    window.BartaBridge.openCamera();
+  } else {
+    const camInput = document.createElement("input");
+    camInput.type = "file"; camInput.accept = "image/*"; camInput.capture = "environment";
+    camInput.addEventListener("change", () => { if (camInput.files[0]) showFilePendingBar(camInput.files[0]); });
+    camInput.click();
+  }
+});
+
+// Video
+attachVideo.addEventListener("click", () => {
+  closeAttachSheet();
+  const vidInput = document.createElement("input");
+  vidInput.type = "file"; vidInput.accept = "video/*";
+  vidInput.addEventListener("change", () => { if (vidInput.files[0]) showFilePendingBar(vidInput.files[0]); });
+  vidInput.click();
+});
+
+// Audio
+attachAudio.addEventListener("click", () => {
+  closeAttachSheet();
+  if (isNativeBarta && window.BartaBridge?.openAudio) {
+    window.BartaBridge.openAudio();
+  } else {
+    fileInputAudio.click();
+  }
+});
+
+// Document
+attachDoc.addEventListener("click", () => {
+  closeAttachSheet();
+  if (isNativeBarta && window.BartaBridge?.openDocument) {
+    window.BartaBridge.openDocument();
+  } else {
+    fileInputDoc.click();
+  }
+});
+
+// Browser fallback: file input changes
+fileInputImage.addEventListener("change", () => { if (fileInputImage.files[0]) showFilePendingBar(fileInputImage.files[0]); });
+fileInputAudio.addEventListener("change", () => { if (fileInputAudio.files[0]) showFilePendingBar(fileInputAudio.files[0]); });
+fileInputDoc.addEventListener("change",   () => { if (fileInputDoc.files[0]) showFilePendingBar(fileInputDoc.files[0]);     });
+
+// Preview bar: Send
+fpbSend.addEventListener("click", () => {
+  if (pendingFile) {
+    sendFile(pendingFile);
+    clearPendingFile();
+  }
+});
+
+// Preview bar: Cancel
+fpbCancel.addEventListener("click", clearPendingFile);
 
 disconnectBtn.addEventListener("click", () => {
   sendSocket("disconnect-peer");

@@ -381,14 +381,56 @@
 
             <div class="messages" id="messages"></div>
 
+            <!-- File pending preview bar -->
+            <div class="file-pending-bar hidden" id="filePendingBar">
+              <div class="fpb-preview" id="fpbPreview"></div>
+              <div class="fpb-info">
+                <span class="fpb-name" id="fpbName"></span>
+                <span class="fpb-size" id="fpbSize"></span>
+              </div>
+              <button class="fpb-cancel" id="fpbCancel" type="button" title="Cancel">✕</button>
+              <button class="primary fpb-send" id="fpbSend" type="button">Send</button>
+            </div>
+
             <form class="composer" id="messageForm">
-              <input id="messageInput" placeholder="Waiting for peer connection" autocomplete="off" disabled />
-              <input id="fileInput" type="file" hidden />
-              <button class="icon-btn" id="fileBtn" type="button" disabled title="Send file">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              <button class="icon-btn attach-btn" id="attachBtn" type="button" disabled title="Attach file">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               </button>
+              <input id="messageInput" placeholder="Waiting for peer connection" autocomplete="off" disabled />
+              <!-- Hidden inputs for browser fallback -->
+              <input id="fileInputImage"  type="file" accept="image/*,video/*" hidden />
+              <input id="fileInputAudio"  type="file" accept="audio/*" hidden />
+              <input id="fileInputDoc"    type="file" accept="*/*" hidden />
+              <input id="fileInput"       type="file" hidden />
               <button class="primary send-btn" id="sendBtn" type="submit" disabled>Send</button>
             </form>
+
+            <!-- Attachment sheet (WhatsApp-style) -->
+            <div class="attach-backdrop hidden" id="attachBackdrop"></div>
+            <div class="attach-sheet hidden" id="attachSheet">
+              <div class="attach-sheet-options">
+                <button class="attach-option" id="attachPhoto" type="button" disabled>
+                  <span class="attach-icon" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">🖼️</span>
+                  <span>Photo</span>
+                </button>
+                <button class="attach-option" id="attachCamera" type="button" disabled>
+                  <span class="attach-icon" style="background:linear-gradient(135deg,#0ea5e9,#06b6d4)">📷</span>
+                  <span>Camera</span>
+                </button>
+                <button class="attach-option" id="attachVideo" type="button" disabled>
+                  <span class="attach-icon" style="background:linear-gradient(135deg,#f43f5e,#e11d48)">🎬</span>
+                  <span>Video</span>
+                </button>
+                <button class="attach-option" id="attachAudio" type="button" disabled>
+                  <span class="attach-icon" style="background:linear-gradient(135deg,#f59e0b,#f97316)">🎵</span>
+                  <span>Audio</span>
+                </button>
+                <button class="attach-option" id="attachDoc" type="button" disabled>
+                  <span class="attach-icon" style="background:linear-gradient(135deg,#10b981,#059669)">📄</span>
+                  <span>Document</span>
+                </button>
+              </div>
+            </div>
           </div>
         </section>
       </section>
@@ -429,7 +471,7 @@
       </div>
     </div>
 
-    <script src="/app.js?v=40"></script>
+    <script src="/app.js?v=41"></script>
 
   </body>
 </html>

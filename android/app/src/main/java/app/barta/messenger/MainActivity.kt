@@ -3,15 +3,23 @@ package app.barta.messenger
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.view.WindowManager
 import android.webkit.*
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.net.toUri
-import java.net.URL
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
@@ -20,6 +28,16 @@ class MainActivity : AppCompatActivity() {
     private val baseUrl = "https://barta.up.railway.app/"
     var isCallActive = false
     private var fileChooserCallback: ValueCallback<Array<android.net.Uri>>? = null
+    private var cameraImageUri: Uri? = null
+
+    companion object {
+        const val REQ_GALLERY  = 101
+        const val REQ_CAMERA   = 102
+        const val REQ_DOCUMENT = 103
+        const val REQ_AUDIO    = 104
+        const val REQ_FILECHOOSER = 100
+        const val REQ_PERMISSIONS = 200
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,8 +71,62 @@ class MainActivity : AppCompatActivity() {
     inner class BartaBridge {
         @android.webkit.JavascriptInterface
         fun setCallActive(isActive: Boolean) {
+            runOnUiThread { isCallActive = isActive }
+        }
+
+        @android.webkit.JavascriptInterface
+        fun openGallery() {
+            val intent = Intent(Intent.ACTION_PICK).apply {
+                type = "image/* video/*"
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
+            }
+            runOnUiThread { startActivityForResult(intent, REQ_GALLERY) }
+        }
+
+        @android.webkit.JavascriptInterface
+        fun openCamera() {
             runOnUiThread {
-                isCallActive = isActive
+                try {
+                    val photoFile = createImageFile()
+                    cameraImageUri = FileProvider.getUriForFile(
+                        this@MainActivity,
+                        "${packageName}.provider",
+                        photoFile
+                    )
+                    val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                        putExtra(MediaStore.EXTRA_OUTPUT, cameraImageUri)
+                    }
+                    startActivityForResult(intent, REQ_CAMERA)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
+        @android.webkit.JavascriptInterface
+        fun openDocument() {
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+            }
+            runOnUiThread { startActivityForResult(intent, REQ_DOCUMENT) }
+        }
+
+        @android.webkit.JavascriptInterface
+        fun openAudio() {
+            val intent = Intent(Intent.ACTION_PICK).apply {
+                type = "audio/*"
+            }
+            runOnUiThread { startActivityForResult(intent, REQ_AUDIO) }
+        }
+
+        @android.webkit.JavascriptInterface
+        fun checkUpdateRequired(latestVersionCode: Int) {
+            val pInfo = packageManager.getPackageInfo(packageName, 0)
+            val installed = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+                pInfo.longVersionCode else pInfo.versionCode.toLong()
+            if (latestVersionCode > installed) {
+                runOnUiThread { showUpdateDialog() }
             }
         }
     }
@@ -220,16 +292,57 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkPermissions() {
-        val permissions = arrayOf(
+        val permissions = mutableListOf(
             Manifest.permission.CAMERA,
             Manifest.permission.RECORD_AUDIO,
             Manifest.permission.MODIFY_AUDIO_SETTINGS,
         )
-        val missingPermissions = permissions.filter {
+        // Android 13+: granular media permissions
+        if (Build.VERSION.SDK_INT >= 33) {
+            permissions += listOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO,
+                Manifest.permission.READ_MEDIA_AUDIO
+            )
+        } else {
+            // Android 9-12
+            permissions += Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        val missing = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (missingPermissions.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), 101)
+        if (missing.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, missing.toTypedArray(), REQ_PERMISSIONS)
+        }
+    }
+
+    private fun createImageFile(): File {
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val storageDir = cacheDir
+        return File.createTempFile("BARTA_${stamp}_", ".jpg", storageDir)
+    }
+
+    private fun dispatchFileToWeb(uri: Uri, requestCode: Int) {
+        try {
+            val cr = contentResolver
+            val mimeType = cr.getType(uri) ?: "application/octet-stream"
+            val cursor = cr.query(uri, arrayOf(
+                android.provider.OpenableColumns.DISPLAY_NAME,
+                android.provider.OpenableColumns.SIZE
+            ), null, null, null)
+            var name = "file"
+            var size = 0L
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    name = it.getString(0) ?: name
+                    size = it.getLong(1)
+                }
+            }
+            val uriStr = uri.toString()
+            val js = "window._bartaFileReady && window._bartaFileReady('${uriStr.replace("'", "\\'")}',' ${name.replace("'", "\\'")}'.trim(),'$mimeType',$size)"
+            runOnUiThread { webView.evaluateJavascript(js, null) }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -281,23 +394,35 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (requestCode == 100) {
-            var results: Array<android.net.Uri>? = null
-            if (resultCode == RESULT_OK && data != null) {
-                val dataString = data.dataString
-                val clipData = data.clipData
-                if (clipData != null) {
-                    results = Array(clipData.itemCount) { i ->
-                        clipData.getItemAt(i).uri
-                    }
-                } else if (dataString != null) {
-                    results = arrayOf(android.net.Uri.parse(dataString))
+        when (requestCode) {
+            REQ_GALLERY, REQ_DOCUMENT, REQ_AUDIO -> {
+                if (resultCode == RESULT_OK) {
+                    val uri = data?.data
+                    if (uri != null) dispatchFileToWeb(uri, requestCode)
                 }
             }
-            fileChooserCallback?.onReceiveValue(results)
-            fileChooserCallback = null
-        } else {
-            super.onActivityResult(requestCode, resultCode, data)
+            REQ_CAMERA -> {
+                if (resultCode == RESULT_OK) {
+                    val uri = cameraImageUri
+                    if (uri != null) dispatchFileToWeb(uri, requestCode)
+                }
+                cameraImageUri = null
+            }
+            REQ_FILECHOOSER -> {
+                var results: Array<Uri>? = null
+                if (resultCode == RESULT_OK && data != null) {
+                    val dataString = data.dataString
+                    val clipData = data.clipData
+                    if (clipData != null) {
+                        results = Array(clipData.itemCount) { i -> clipData.getItemAt(i).uri }
+                    } else if (dataString != null) {
+                        results = arrayOf(Uri.parse(dataString))
+                    }
+                }
+                fileChooserCallback?.onReceiveValue(results)
+                fileChooserCallback = null
+            }
+            else -> super.onActivityResult(requestCode, resultCode, data)
         }
     }
 }
