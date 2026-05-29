@@ -23,8 +23,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val _users       = MutableStateFlow<List<OnlineUser>>(emptyList())
-    val users: StateFlow<List<OnlineUser>> = _users
+    private val _contacts    = MutableStateFlow<List<OnlineUser>>(emptyList())
+    val contacts: StateFlow<List<OnlineUser>> = _contacts
 
     private val _connState   = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connState: StateFlow<ConnectionState> = _connState
@@ -39,11 +39,20 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     val myUsername = SecurePrefs.getUsername(app)
 
     init {
+        _contacts.value = SecurePrefs.getContacts(app)
+
         // Observe connection status
         socketClient.connected.onEach { connected ->
             _socketReady.value = connected
-            if (!connected && _connState.value is ConnectionState.Online)
+            if (connected) {
+                // Subscribe to online status for all contacts
+                val ids = _contacts.value.map { it.id }
+                if (ids.isNotEmpty()) {
+                    socketClient.sendRaw("subscribe", mapOf("ids" to ids))
+                }
+            } else if (_connState.value is ConnectionState.Online) {
                 _connState.value = ConnectionState.Disconnected
+            }
         }.launchIn(viewModelScope)
 
         // Observe WebSocket messages
@@ -59,7 +68,12 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private fun handleMessage(msg: WsMessage) {
         when (msg.type) {
             "presence" -> {
-                _users.value = (msg.users ?: emptyList()).filter { it.id != myId }
+                // Backend sends the updated presence for subscribed users
+                val updatedUsers = msg.users ?: emptyList()
+                _contacts.value = _contacts.value.map { contact ->
+                    val update = updatedUsers.find { it.id == contact.id }
+                    update ?: contact // Fallback to last known if not in update (shouldn't happen, but safe)
+                }
                 if (_connState.value !is ConnectionState.Connected)
                     _connState.value = ConnectionState.Online
             }
@@ -112,10 +126,17 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setSearchQuery(q: String) { _searchQuery.value = q }
 
-    fun filteredUsers(): List<OnlineUser> {
+    fun filteredContacts(): List<OnlineUser> {
         val q = _searchQuery.value.trim().lowercase()
-        return if (q.isEmpty()) _users.value
-        else _users.value.filter { it.username.lowercase().contains(q) }
+        return if (q.isEmpty()) _contacts.value
+        else _contacts.value.filter { it.username.lowercase().contains(q) }
+    }
+
+    fun addContact(user: OnlineUser) {
+        SecurePrefs.addContact(getApplication(), user)
+        _contacts.value = SecurePrefs.getContacts(getApplication())
+        // Resubscribe
+        socketClient.sendRaw("subscribe", mapOf("ids" to _contacts.value.map { it.id }))
     }
 
     private fun registerFcmToken() {

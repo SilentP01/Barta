@@ -64,7 +64,7 @@ fun SignupScreen(
         ) {
             Spacer(Modifier.height(64.dp))
             Text("Create Account", style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.ExtraBold), color = Color.White)
-            Text("Join Barta today", color = Color.White.copy(alpha = 0.55f),
+            Text("Barta - Communication, Reimagined.", color = Color.White.copy(alpha = 0.55f),
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp, bottom = 32.dp))
 
             ErrorBanner(errorMsg, modifier = Modifier.padding(bottom = 16.dp))

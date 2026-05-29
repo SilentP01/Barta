@@ -29,6 +29,7 @@ class SocketClient {
     private var retryCount = 0
 
     private val client = OkHttpClient.Builder()
+        .cookieJar(ApiClient.cookieJar)
         .pingInterval(25, TimeUnit.SECONDS)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.SECONDS) // no timeout for persistent connection

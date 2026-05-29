@@ -64,8 +64,8 @@ object NotificationHelper {
     /** Full-screen incoming call notification (shows on locked screen) */
     fun showIncomingCallNotification(context: Context, callerName: String, callerId: String) {
         // Intent that opens MainActivity with incoming call action
-        val intent = Intent(context, MainActivity::class.java).apply {
-            action = "ACTION_INCOMING_REQUEST"
+        val intent = Intent(context, app.barta.messenger.ui.IncomingCallActivity::class.java).apply {
+            putExtra("callerName", callerName)
             putExtra("caller_name", callerName)
             putExtra("caller_id", callerId)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP

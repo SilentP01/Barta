@@ -59,9 +59,9 @@ fun LoginScreen(
                 fontWeight = FontWeight.ExtraBold,
                 brush = Brush.linearGradient(listOf(Teal500, Color(0xFF06B6D4)))
             ))
-            Text("Welcome back", color = Color.White.copy(alpha = 0.55f),
+            Text("Barta - Communication, Reimagined.", color = Color.White.copy(alpha = 0.55f),
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 4.dp, bottom = 36.dp))
+                modifier = Modifier.padding(top = 8.dp, bottom = 36.dp))
 
             ErrorBanner(errorMsg, modifier = Modifier.padding(bottom = 16.dp))
 
@@ -71,7 +71,13 @@ fun LoginScreen(
             BartaTextField(value = password, onValueChange = { password = it; errorMsg = "" },
                 label = "Password", isPassword = true, imeAction = ImeAction.Done,
                 onDone = { if (username.isNotBlank() && password.isNotBlank()) viewModel.login(username, password) })
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(14.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = { /* TODO: Magic Link route */ }) {
+                    Text("Forgot Password?", color = Teal500, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
             BartaButton("Sign In", onClick = { viewModel.login(username, password) },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = username.isNotBlank() && password.isNotBlank(), isLoading = isLoading)

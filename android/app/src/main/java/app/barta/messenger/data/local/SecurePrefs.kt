@@ -11,6 +11,7 @@ object SecurePrefs {
     private const val KEY_EMAIL     = "email"
     private const val KEY_AVATAR    = "avatar_url"
     private const val KEY_FCM       = "fcm_token"
+    private const val KEY_CONTACTS  = "contacts_json"
 
     private fun prefs(context: Context) = EncryptedSharedPreferences.create(
         context,
@@ -34,4 +35,20 @@ object SecurePrefs {
     fun saveAvatarUrl(context: Context, url: String) = prefs(context).edit().putString(KEY_AVATAR, url).apply()
     fun saveFcmToken(context: Context, token: String) = prefs(context).edit().putString(KEY_FCM, token).apply()
     fun getFcmToken(context: Context) = prefs(context).getString(KEY_FCM, null)
+
+    fun getContacts(context: Context): List<app.barta.messenger.data.model.OnlineUser> {
+        val json = prefs(context).getString(KEY_CONTACTS, "[]") ?: "[]"
+        return try {
+            app.barta.messenger.data.network.json.decodeFromString(json)
+        } catch (e: Exception) { emptyList() }
+    }
+
+    fun addContact(context: Context, user: app.barta.messenger.data.model.OnlineUser) {
+        val current = getContacts(context).toMutableList()
+        if (current.none { it.id == user.id }) {
+            current.add(user)
+            val json = app.barta.messenger.data.network.json.encodeToString(kotlinx.serialization.builtins.ListSerializer(app.barta.messenger.data.model.OnlineUser.serializer()), current)
+            prefs(context).edit().putString(KEY_CONTACTS, json).apply()
+        }
+    }
 }

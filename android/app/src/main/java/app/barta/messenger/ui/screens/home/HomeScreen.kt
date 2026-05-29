@@ -39,11 +39,12 @@ fun HomeScreen(
     onNavigateToProfile: () -> Unit,
     onLogout: () -> Unit
 ) {
-    val users      by viewModel.users.collectAsStateWithLifecycle()
+    val contacts   by viewModel.contacts.collectAsStateWithLifecycle()
     val connState  by viewModel.connState.collectAsStateWithLifecycle()
     val socketReady by viewModel.socketReady.collectAsStateWithLifecycle()
     val query      by viewModel.searchQuery.collectAsStateWithLifecycle()
-    val filtered   = viewModel.filteredUsers()
+    val filtered   = viewModel.filteredContacts()
+    var showSearchDialog by remember { mutableStateOf(false) }
 
     // Incoming request dialog
     if (connState is ConnectionState.PeerRequesting) {
@@ -88,8 +89,27 @@ fun HomeScreen(
                 )
             )
         },
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showSearchDialog = true },
+                containerColor = Teal500
+            ) {
+                Icon(Icons.Filled.Search, "Add Contact", tint = Color.White)
+            }
+        },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
+        if (showSearchDialog) {
+            SearchUserDialog(
+                onDismiss = { showSearchDialog = false },
+                onAdd = { user ->
+                    viewModel.addContact(user)
+                    showSearchDialog = false
+                }
+            )
+        }
+
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
 
             // Connection status bar
@@ -122,21 +142,13 @@ fun HomeScreen(
                 )
             )
 
-            // Online count label
-            Text(
-                "${filtered.size} online",
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            if (filtered.isEmpty() && socketReady) {
+            if (contacts.isEmpty()) {
                 // Empty state
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("🕊️", fontSize = 48.sp)
+                        Text("👋", fontSize = 48.sp)
                         Spacer(Modifier.height(12.dp))
-                        Text("No one online right now", style = MaterialTheme.typography.bodyMedium,
+                        Text("No contacts yet\nTap the search button to find friends", style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                     }
                 }
@@ -195,12 +207,12 @@ fun UserRow(user: OnlineUser, isBusy: Boolean, isCurrentPeer: Boolean = false, o
             Column(Modifier.weight(1f)) {
                 Text(user.username, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
-                    if (isBusy) "In a conversation" else "Available to chat",
+                    if (isBusy) "In a conversation" else if (user.status == "offline") "Offline" else "Online",
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (isBusy) Yellow400 else Green400
+                    color = if (isBusy) Yellow400 else if (user.status == "offline") Grey400 else Green400
                 )
             }
-            if (!isBusy) {
+            if (!isBusy && user.status != "offline") {
                 Surface(
                     color = Teal500.copy(alpha = 0.12f),
                     shape = RoundedCornerShape(10.dp)
@@ -229,5 +241,90 @@ fun IncomingRequestDialog(callerName: String, onAccept: () -> Unit, onReject: ()
         dismissButton = {
             OutlinedButton(onClick = onReject) { Text("Decline") }
         }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SearchUserDialog(onDismiss: () -> Unit, onAdd: (OnlineUser) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf(emptyList<OnlineUser>()) }
+    var isLoading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Contact") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("Username or email") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        if (query.isBlank()) return@Button
+                        isLoading = true
+                        error = ""
+                        scope.kotlinx.coroutines.launch {
+                            try {
+                                val req = okhttp3.Request.Builder().url("${app.barta.messenger.data.network.ApiClient.BASE_URL}/api/search?q=${query.trim()}").build()
+                                val response = kotlinx.coroutines.Dispatchers.IO.let {
+                                    kotlinx.coroutines.withContext(it) { app.barta.messenger.data.network.ApiClient.http.newCall(req).execute() }
+                                }
+                                val body = response.body?.string() ?: ""
+                                if (response.isSuccessful) {
+                                    val obj = app.barta.messenger.data.network.json.parseToJsonElement(body).kotlinx.serialization.json.jsonObject
+                                    val usersArray = obj["users"]?.kotlinx.serialization.json.jsonArray ?: kotlinx.serialization.json.JsonArray(emptyList())
+                                    val parsed = usersArray.map { app.barta.messenger.data.network.json.decodeFromJsonElement(app.barta.messenger.data.model.OnlineUser.serializer(), it) }
+                                    results = parsed
+                                } else {
+                                    error = "Search failed"
+                                }
+                            } catch (e: Exception) {
+                                error = e.message ?: "Network error"
+                            } finally {
+                                isLoading = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Teal500)
+                ) {
+                    Text("Search")
+                }
+
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally).padding(16.dp))
+                }
+                if (error.isNotEmpty()) {
+                    Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+                }
+
+                LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
+                    items(results) { user ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AvatarView(user.username, user.avatarUrl, 40.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Text(user.username, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { onAdd(user) }) {
+                                Text("Add", color = Teal500)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
     )
 }
+

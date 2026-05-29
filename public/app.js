@@ -300,16 +300,35 @@ function switchAuth(mode) {
   setNotice();
 }
 
-function renderUsers(users = []) {
-  userList.innerHTML = "";
-  const visibleUsers = users.filter((user) => user.id !== me.id);
+let localFriends = JSON.parse(localStorage.getItem("barta_friends") || "[]");
 
-  if (!visibleUsers.length) {
-    userList.innerHTML = '<p class="muted">No users online</p>';
+function updateFriendsSubscription() {
+  if (socket?.readyState === WebSocket.OPEN) {
+    sendSocket("subscribe", { ids: localFriends.map(f => f.id) });
+  }
+}
+
+function addFriend(id, username) {
+  if (!localFriends.find(f => f.id === id)) {
+    localFriends.push({ id, username });
+    localStorage.setItem("barta_friends", JSON.stringify(localFriends));
+    updateFriendsSubscription();
+  }
+}
+
+function renderUsers(onlineUsers = []) {
+  userList.innerHTML = "";
+  if (!localFriends.length) {
+    userList.innerHTML = '<p class="muted">No friends yet. Search to add.</p>';
     return;
   }
+  
+  const friendsWithStatus = localFriends.map(f => {
+    const onlineUser = onlineUsers.find(u => u.id === f.id);
+    return { ...f, status: onlineUser ? onlineUser.status : "offline" };
+  });
 
-  for (const user of visibleUsers) {
+  for (const user of friendsWithStatus) {
     const row = document.createElement("div");
     row.className = "user-row";
     row.innerHTML = `
@@ -324,20 +343,17 @@ function renderUsers(users = []) {
         button.className = "secondary";
         button.textContent = "Request";
         button.addEventListener("click", (e) => {
-          e.stopPropagation(); // prevent row click
+          e.stopPropagation();
           if (isMobileDevice && !isNativeBarta) showPrivacyWarningToast();
           sendSocket("request", { to: user.id });
         });
         row.appendChild(button);
       } else {
-        // We are connected. Make the row clickable to return or swap.
         row.style.cursor = "pointer";
         row.addEventListener("click", () => {
           if (currentPeer.id === user.id) {
-            // Already connected to this person, just slide chat back in
             showWorkspace();
           } else {
-            // Connected to someone else
             if (confirm(`Disconnect from @${currentPeer.username} to connect to @${user.username}?`)) {
               resetPeer();
               if (isMobileDevice && !isNativeBarta) showPrivacyWarningToast();
@@ -348,7 +364,6 @@ function renderUsers(users = []) {
       }
     }
     userList.appendChild(row);
-
   }
 }
 
@@ -460,13 +475,14 @@ function connectSocket() {
   socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`);
 
   socket.addEventListener("open", () => {
-    sendSocket("refresh-presence");
+    updateFriendsSubscription();
   });
 
   socket.addEventListener("message", async (event) => {
     const message = JSON.parse(event.data);
 
     if (message.type === "presence") renderUsers(message.users);
+    if (message.type === "presence-update") sendSocket("refresh-presence");
     if (message.type === "incoming-request") renderRequest(message.from);
     if (message.type === "request-sent") searchResult.textContent = `Request sent to @${message.to.username}`;
     if (message.type === "request-rejected") searchResult.textContent = `@${message.by.username} rejected the request`;
@@ -1561,24 +1577,33 @@ profilePasswordOtpForm.addEventListener("submit", async (event) => {
 searchForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const username = new FormData(searchForm).get("username");
-  searchResult.textContent = "";
+  searchResult.innerHTML = "Searching...";
   try {
-    const response = await fetch(`/api/search?username=${encodeURIComponent(username)}`);
+    const response = await fetch(`/api/search?q=${encodeURIComponent(username)}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
-    const user = data.user;
-    searchResult.innerHTML = `<div class="user-row"><div><strong>@${escapeHtml(user.username)}</strong><div class="status ${user.status}">${user.status}</div></div></div>`;
-    if (user.id !== me.id && user.status === "online" && !currentPeer) {
+    
+    searchResult.innerHTML = "";
+    if (!data.users || data.users.length === 0) {
+      searchResult.textContent = "No users found.";
+      return;
+    }
+    
+    for (const user of data.users) {
+      if (user.id === me.id) continue;
+      const row = document.createElement("div");
+      row.className = "user-row";
+      row.innerHTML = `<div><strong>@${escapeHtml(user.username)}</strong><div class="status ${user.status}">${user.status}</div></div>`;
+      
       const button = document.createElement("button");
       button.className = "secondary";
-      button.textContent = "Request";
+      button.textContent = "Add Friend";
       button.addEventListener("click", () => {
-        if (isMobileDevice && !isNativeBarta) {
-          showPrivacyWarningToast();
-        }
-        sendSocket("request", { to: user.id });
+        addFriend(user.id, user.username);
+        searchResult.innerHTML = `<span style="color:green">Added @${escapeHtml(user.username)}</span>`;
       });
-      searchResult.querySelector(".user-row").appendChild(button);
+      row.appendChild(button);
+      searchResult.appendChild(row);
     }
   } catch (error) {
     searchResult.textContent = error.message;

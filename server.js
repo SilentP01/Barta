@@ -121,8 +121,15 @@ async function initDatabase() {
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token TEXT;`).catch(() => {});
 
 
-  // Drop the sessions table if it exists (migrate to in-memory sessions)
-  await pool.query(`DROP TABLE IF EXISTS sessions CASCADE;`).catch(() => {});
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at BIGINT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+  `).catch(() => {});
 }
 
 async function one(sql, params = []) {
@@ -292,22 +299,10 @@ function getBaseUrl(req) {
   return `${proto}://${host}`;
 }
 
-// ─── IN-MEMORY SESSION STORE (zero persistence) ──────────────────────────────
-// Sessions live only in RAM. They are lost on server restart by design.
-const sessionStore = new Map(); // tokenHash -> { userId, expiresAt }
-
-// Clean up expired sessions every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, val] of sessionStore) {
-    if (val.expiresAt <= now) sessionStore.delete(key);
-  }
-}, 10 * 60 * 1000);
-
 async function createSession(user) {
   const token = crypto.randomBytes(32).toString("base64url");
   const tokenHash = hashToken(token);
-  sessionStore.set(tokenHash, { userId: user.id, expiresAt: Date.now() + SESSION_TTL_MS });
+  await run("INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)", [crypto.randomUUID(), user.id, tokenHash, Date.now() + SESSION_TTL_MS]);
   return token;
 }
 
@@ -315,17 +310,17 @@ async function getSessionUser(req) {
   const token = parseCookies(req)[SESSION_COOKIE];
   if (!token) return null;
   const tokenHash = hashToken(token);
-  const record = sessionStore.get(tokenHash);
-  if (!record || record.expiresAt <= Date.now()) {
-    sessionStore.delete(tokenHash);
+  const row = await one("SELECT user_id, expires_at FROM sessions WHERE token_hash = $1", [tokenHash]);
+  if (!row || row.expires_at <= Date.now()) {
+    await run("DELETE FROM sessions WHERE token_hash = $1", [tokenHash]);
     return null;
   }
-  return findUserById(record.userId);
+  return findUserById(row.user_id);
 }
 
 async function clearSession(req, res) {
   const token = parseCookies(req)[SESSION_COOKIE];
-  if (token) sessionStore.delete(hashToken(token));
+  if (token) await run("DELETE FROM sessions WHERE token_hash = $1", [hashToken(token)]);
   return sendJsonWithHeaders(res, 200, { ok: true }, { "Set-Cookie": `${SESSION_COOKIE}=; ${cookieOptions(req, 0)}` });
 }
 
@@ -649,7 +644,7 @@ async function handleApi(req, res, url) {
     }
 
     if (req.method === "GET" && url.pathname === "/api/me") {
-      const user = await authenticate(req);
+      const user = await getSessionUser(req);
       if (!user) return sendError(res, 401, "Unauthorized.");
       return sendJson(res, 200, { user: safeSelfUser(user) });
     }
@@ -749,8 +744,22 @@ async function handleApi(req, res, url) {
       const sessionUser = await getSessionUser(req);
       if (!sessionUser) return sendError(res, 401, "Login expired. Please sign in again.");
 
+      const q = url.searchParams.get("q");
+      if (q) {
+        const users = await pool.query("SELECT id, username FROM users WHERE username ILIKE $1 OR email ILIKE $1 LIMIT 20", [`%${q}%`]);
+        const mappedUsers = users.rows.map(u => {
+          const live = online.get(u.id);
+          return {
+            id: u.id,
+            username: u.username,
+            status: live ? live.status : "offline"
+          };
+        });
+        return sendJson(res, 200, { users: mappedUsers });
+      }
+
       const username = normalizeUsername(url.searchParams.get("username"));
-      if (!username) return sendError(res, 400, "Enter a username.");
+      if (!username) return sendError(res, 400, "Enter a username or q parameter.");
 
       const user = await findUserByUsername(username);
       if (!user) return sendError(res, 404, "User not found.");
@@ -809,12 +818,12 @@ async function handleApi(req, res, url) {
         const identifier = decodeURIComponent(url.pathname.replace("/api/admin/users/", ""));
         const user = await one("SELECT id, username FROM users WHERE email = $1 OR username = $1", [identifier.toLowerCase()]);
         if (!user) return sendError(res, 404, "User not found.");
-        // Clear any in-memory sessions for this user
-        for (const [hash, s] of sessionStore) { if (s.userId === user.id) sessionStore.delete(hash); }
+        // Clear sessions from database
+        await run("DELETE FROM sessions WHERE user_id = $1", [user.id]);
         await run("DELETE FROM users WHERE id = $1", [user.id]);
         // kick them offline if connected
         const entry = online.get(user.id);
-        if (entry) { endPair(user.id); entry.ws.end(); online.delete(user.id); broadcastPresence(); }
+        if (entry) { endPair(user.id); entry.ws.end(); online.delete(user.id); notifyPresenceChange(user.id, "offline"); }
         return sendJson(res, 200, { ok: true, message: `User @${user.username} deleted.` });
       }
 
@@ -866,17 +875,12 @@ function send(ws, type, payload = {}) {
   wsSend(ws, JSON.stringify({ type, ...payload }));
 }
 
-function publicPresence() {
-  return [...online.values()].map((entry) => ({
-    id: entry.user.id,
-    username: entry.user.username,
-    status: entry.status
-  }));
-}
-
-function broadcastPresence() {
-  const users = publicPresence();
-  for (const entry of online.values()) send(entry.ws, "presence", { users });
+function notifyPresenceChange(changedUserId, status) {
+  for (const entry of online.values()) {
+    if (entry.ws.subscriptions && entry.ws.subscriptions.has(changedUserId)) {
+      send(entry.ws, "presence-update", { user: { id: changedUserId, status } });
+    }
+  }
 }
 
 function endPair(userId, notifyPeer = true) {
@@ -886,11 +890,13 @@ function endPair(userId, notifyPeer = true) {
   const peerId = entry.peerId;
   entry.peerId = null;
   entry.status = "online";
+  notifyPresenceChange(userId, "online");
 
   const peer = online.get(peerId);
   if (peer && peer.peerId === userId) {
     peer.peerId = null;
     peer.status = "online";
+    notifyPresenceChange(peerId, "online");
     if (notifyPeer) send(peer.ws, "peer-disconnected");
   }
 }
@@ -951,7 +957,8 @@ function handleSocketMessage(ws, user, raw) {
 
     send(requester.ws, "request-accepted", { peer: safeUser(user), initiator: true });
     send(ws, "connected", { peer: safeUser(requester.user), initiator: false });
-    broadcastPresence();
+    notifyPresenceChange(user.id, "connected");
+    notifyPresenceChange(requester.user.id, "connected");
   }
 
   if (message.type === "signal") {
@@ -961,12 +968,28 @@ function handleSocketMessage(ws, user, raw) {
 
   if (message.type === "disconnect-peer") {
     endPair(user.id);
-    broadcastPresence();
     send(ws, "peer-disconnected");
   }
 
   if (message.type === "refresh-presence") {
-    broadcastPresence();
+    const users = [];
+    if (ws.subscriptions) {
+      for (const subId of ws.subscriptions) {
+        const entry = online.get(subId);
+        users.push({ id: subId, status: entry ? entry.status : "offline" });
+      }
+    }
+    send(ws, "presence", { users });
+  }
+
+  if (message.type === "subscribe") {
+    ws.subscriptions = new Set(message.ids || []);
+    const users = [];
+    for (const subId of ws.subscriptions) {
+      const entry = online.get(subId);
+      users.push({ id: subId, status: entry ? entry.status : "offline" });
+    }
+    send(ws, "presence", { users });
   }
 }
 
@@ -1058,9 +1081,10 @@ async function acceptWebSocket(req, socket) {
   const existing = online.get(user.id);
   if (existing) existing.ws.end();
 
+  socket.subscriptions = new Set();
   online.set(user.id, { ws: socket, user, status: "online", peerId: null });
   send(socket, "ready", { user });
-  broadcastPresence();
+  notifyPresenceChange(user.id, "online");
 
   let buffer = Buffer.alloc(0);
   let messageFragments = [];
@@ -1100,7 +1124,7 @@ async function acceptWebSocket(req, socket) {
       endPair(user.id);
       online.delete(user.id);
       clearRequestsFor(user.id);
-      broadcastPresence();
+      notifyPresenceChange(user.id, "offline");
     }
   });
 }
