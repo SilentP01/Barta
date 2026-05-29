@@ -111,7 +111,7 @@ fun BartaNavGraph(
         // ── Chat ──────────────────────────────────────────────────────────────
         composable(Screen.Chat.route) { back ->
             val app      = LocalContext.current.applicationContext as Application
-            val peerId   = back.arguments?.getString("peerId")?.toIntOrNull() ?: -1
+            val peerId   = back.arguments?.getString("peerId") ?: ""
             val peerName = back.arguments?.getString("peerName") ?: ""
             val avatar   = back.arguments?.getString("peerAvatar")?.takeIf { it != "null" }
             val initiator = back.arguments?.getString("initiator")?.toBoolean() ?: false

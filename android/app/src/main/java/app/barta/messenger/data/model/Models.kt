@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class User(
-    val id: Int,
+    val id: String,
     val username: String,
     val email: String,
     val status: String = "online",
@@ -28,7 +28,7 @@ data class ApiError(val error: String = "Something went wrong.")
 
 @Serializable
 data class OnlineUser(
-    val id: Int,
+    val id: String,
     val username: String,
     val status: String,
     val avatarUrl: String? = null

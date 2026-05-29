@@ -20,7 +20,7 @@ data class WsMessage(
     val users: List<OnlineUser>? = null,
     // request / accept / reject
     val from: OnlineUser? = null,
-    val to: Int? = null,
+    val to: String? = null,
     val peer: OnlineUser? = null,
     val initiator: Boolean? = null,
     val by: OnlineUser? = null,

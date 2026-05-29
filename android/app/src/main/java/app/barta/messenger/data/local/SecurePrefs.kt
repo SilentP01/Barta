@@ -20,13 +20,13 @@ object SecurePrefs {
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
-    fun saveSession(context: Context, userId: Int, username: String, email: String) =
-        prefs(context).edit().putInt(KEY_USER_ID, userId).putString(KEY_USERNAME, username).putString(KEY_EMAIL, email).apply()
+    fun saveSession(context: Context, userId: String, username: String, email: String) =
+        prefs(context).edit().putString(KEY_USER_ID, userId).putString(KEY_USERNAME, username).putString(KEY_EMAIL, email).apply()
 
     fun clearSession(context: Context) = prefs(context).edit().clear().apply()
 
-    fun isLoggedIn(context: Context)   = prefs(context).getInt(KEY_USER_ID, -1) != -1
-    fun getUserId(context: Context)    = prefs(context).getInt(KEY_USER_ID, -1)
+    fun isLoggedIn(context: Context)   = prefs(context).getString(KEY_USER_ID, null) != null
+    fun getUserId(context: Context)    = prefs(context).getString(KEY_USER_ID, "") ?: ""
     fun getUsername(context: Context)  = prefs(context).getString(KEY_USERNAME, "") ?: ""
     fun getEmail(context: Context)     = prefs(context).getString(KEY_EMAIL, "") ?: ""
     fun getAvatarUrl(context: Context) = prefs(context).getString(KEY_AVATAR, null)
