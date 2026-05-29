@@ -3,17 +3,23 @@ package app.barta.messenger.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import app.barta.messenger.data.model.ChatMessage
+import app.barta.messenger.data.local.SecurePrefs
 import app.barta.messenger.data.model.ConnectionState
 import app.barta.messenger.data.model.OnlineUser
 import app.barta.messenger.data.model.WsMessage
+import app.barta.messenger.data.network.ApiClient
+import app.barta.messenger.data.network.JSON_MEDIA
 import app.barta.messenger.data.network.socketClient
-import app.barta.messenger.data.local.SecurePrefs
+import app.barta.messenger.util.NotificationHelper
+import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -29,44 +35,48 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
 
-    val myId = SecurePrefs.getUserId(app)
+    val myId       = SecurePrefs.getUserId(app)
     val myUsername = SecurePrefs.getUsername(app)
 
     init {
         // Observe connection status
         socketClient.connected.onEach { connected ->
             _socketReady.value = connected
-            if (!connected && _connState.value is ConnectionState.Online) {
+            if (!connected && _connState.value is ConnectionState.Online)
                 _connState.value = ConnectionState.Disconnected
-            }
         }.launchIn(viewModelScope)
 
-        // Observe messages
+        // Observe WebSocket messages
         socketClient.messages.onEach { msg -> handleMessage(msg) }.launchIn(viewModelScope)
 
-        // Connect
+        // Connect WebSocket
         socketClient.connect()
+
+        // Register FCM token with server
+        registerFcmToken()
     }
 
     private fun handleMessage(msg: WsMessage) {
         when (msg.type) {
             "presence" -> {
-                val list = msg.users ?: emptyList()
-                _users.value = list.filter { it.id != myId }
-                // Once presence is received we are properly online
-                if (_connState.value !is ConnectionState.Connected) {
+                _users.value = (msg.users ?: emptyList()).filter { it.id != myId }
+                if (_connState.value !is ConnectionState.Connected)
                     _connState.value = ConnectionState.Online
-                }
             }
             "incoming-request" -> {
                 val from = msg.from ?: return
                 _connState.value = ConnectionState.PeerRequesting(from)
+                // Show full-screen notification (handles locked screen / backgrounded app)
+                NotificationHelper.showIncomingCallNotification(
+                    context    = getApplication(),
+                    callerName = from.username,
+                    callerId   = from.id.toString()
+                )
             }
-            "request-sent" -> {
-                // to field missing from server — we already set RequestSent before calling send
-            }
+            "request-sent"     -> { /* initiator side — state already set in sendRequest */ }
             "request-accepted", "connected" -> {
-                val peer = msg.peer ?: return
+                NotificationHelper.cancelIncomingCallNotification(getApplication())
+                val peer      = msg.peer ?: return
                 val initiator = msg.initiator ?: false
                 _connState.value = ConnectionState.Connected(peer, initiator)
             }
@@ -85,10 +95,12 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun acceptRequest() {
+        NotificationHelper.cancelIncomingCallNotification(getApplication())
         socketClient.sendRaw("respond-request", mapOf("accept" to true))
     }
 
     fun rejectRequest() {
+        NotificationHelper.cancelIncomingCallNotification(getApplication())
         _connState.value = ConnectionState.Online
         socketClient.sendRaw("respond-request", mapOf("accept" to false))
     }
@@ -106,8 +118,16 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         else _users.value.filter { it.username.lowercase().contains(q) }
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        // Don't disconnect on screen rotation — socket lives in singleton
+    private fun registerFcmToken() {
+        viewModelScope.launch {
+            try {
+                val token = FirebaseMessaging.getInstance().token.await()
+                SecurePrefs.saveFcmToken(getApplication(), token)
+                // Send to server
+                val body = """{"token":"$token"}""".toRequestBody(JSON_MEDIA)
+                val req  = Request.Builder().url("${ApiClient.BASE_URL}/api/fcm-token").post(body).build()
+                ApiClient.http.newCall(req).execute().close()
+            } catch (_: Exception) { /* Non-fatal; retry next login */ }
+        }
     }
 }

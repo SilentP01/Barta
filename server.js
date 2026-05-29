@@ -1,8 +1,10 @@
 const crypto = require("crypto");
 const fs = require("fs/promises");
 const http = require("http");
+const https = require("https");
 const path = require("path");
 const { Pool } = require("pg");
+
 
 
 process.on("uncaughtException", (err) => {
@@ -98,6 +100,10 @@ async function initDatabase() {
   CREATE INDEX IF NOT EXISTS idx_magic_links_email_purpose ON magic_links(email, purpose);
   `);
 
+  // Safe migration: add fcm_token column if not exists
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token TEXT;`).catch(() => {});
+
+
   // Drop the sessions table if it exists (migrate to in-memory sessions)
   await pool.query(`DROP TABLE IF EXISTS sessions CASCADE;`).catch(() => {});
 }
@@ -174,6 +180,48 @@ function verifyPassword(password, passwordHash) {
 function safeUser(user) {
   return { id: user.id, username: user.username };
 }
+
+// ── FCM push notification ─────────────────────────────────────────────────────
+async function sendFcmPush(fcmToken, fromUser) {
+  if (!process.env.FCM_SERVER_KEY || !fcmToken) return;
+  const payload = JSON.stringify({
+    to: fcmToken,
+    priority: "high",
+    data: {
+      type: "incoming-request",
+      fromId: String(fromUser.id),
+      fromUsername: fromUser.username
+    },
+    notification: {
+      title: "Incoming Connection Request",
+      body: `${fromUser.username} wants to connect with you`
+    },
+    android: {
+      priority: "high",
+      notification: { channel_id: "barta_calls" }
+    }
+  });
+  return new Promise((resolve) => {
+    const options = {
+      hostname: "fcm.googleapis.com",
+      path: "/fcm/send",
+      method: "POST",
+      headers: {
+        "Authorization": `key=${process.env.FCM_SERVER_KEY}`,
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(payload)
+      }
+    };
+    const req = https.request(options, (resp) => {
+      resp.on("data", () => {});
+      resp.on("end", resolve);
+    });
+    req.on("error", (e) => { console.error("FCM error:", e.message); resolve(); });
+    req.write(payload);
+    req.end();
+  });
+}
+
 
 function requireFields(fields, body) {
   return fields.every((field) => typeof body[field] === "string" && body[field].trim());
@@ -693,8 +741,20 @@ async function handleApi(req, res, url) {
       });
     }
 
+    // ── FCM token registration ────────────────────────────────────────────────
+    if (req.method === "POST" && url.pathname === "/api/fcm-token") {
+      const sessionUser = await getSessionUser(req);
+      if (!sessionUser) return sendError(res, 401, "Login expired.");
+      const body = await readBody(req);
+      const token = String(body.token || "").trim();
+      if (!token) return sendError(res, 400, "Token required.");
+      await run("UPDATE users SET fcm_token = $1 WHERE id = $2", [token, sessionUser.id]);
+      return sendJson(res, 200, { ok: true });
+    }
+
     // ── Admin API ────────────────────────────────────────────
     if (url.pathname.startsWith("/api/admin/")) {
+
       const secret = req.headers["x-admin-secret"] || "";
       if (!ADMIN_SECRET || secret !== ADMIN_SECRET) return sendError(res, 401, "Unauthorized.");
 
@@ -832,12 +892,19 @@ function handleSocketMessage(ws, user, raw) {
   if (message.type === "request") {
     const target = online.get(message.to);
     if (!target || target.status !== "online" || target.user.id === user.id || me.status !== "online") {
+      // Target not online — try FCM push if they have a token
+      if (!target && message.to) {
+        one("SELECT fcm_token FROM users WHERE id = $1", [message.to]).then((row) => {
+          if (row && row.fcm_token) sendFcmPush(row.fcm_token, user);
+        }).catch(() => {});
+      }
       return send(ws, "error-message", { error: "User is not available." });
     }
     pendingRequests.set(target.user.id, user.id);
     send(target.ws, "incoming-request", { from: safeUser(user) });
     send(ws, "request-sent", { to: safeUser(target.user) });
   }
+
 
   if (message.type === "respond-request") {
     const fromId = pendingRequests.get(user.id);

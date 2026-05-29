@@ -1,6 +1,8 @@
 package app.barta.messenger.viewmodel
 
 import android.app.Application
+import android.content.Intent
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -10,6 +12,7 @@ import app.barta.messenger.data.model.OnlineUser
 import app.barta.messenger.data.network.CallKind
 import app.barta.messenger.data.network.WebRTCClient
 import app.barta.messenger.data.network.socketClient
+import app.barta.messenger.service.CallForegroundService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.launchIn
@@ -109,9 +112,9 @@ class ChatViewModel(
     fun startAudioCall() {
         _callState.value = CallState.Calling
         webRTC.addVideoCall()
-        // Notify peer via DataChannel
         webRTC.sendText("""{"kind":"call-request","video":"false"}""")
         _callState.value = CallState.Active(CallKind.AUDIO)
+        startCallService()
     }
 
     fun startVideoCall() {
@@ -119,6 +122,7 @@ class ChatViewModel(
         webRTC.addVideoCall()
         webRTC.sendText("""{"kind":"call-request","video":"true"}""")
         _callState.value = CallState.Active(CallKind.VIDEO)
+        startCallService()
     }
 
     fun endCall() {
@@ -126,6 +130,7 @@ class ChatViewModel(
         webRTC.toggleCamera(false)
         webRTC.toggleMic(false)
         _callState.value = CallState.Idle
+        stopCallService()
     }
 
     fun toggleMic() {
@@ -144,7 +149,23 @@ class ChatViewModel(
 
     fun disconnect() {
         socketClient.sendRaw("disconnect-peer")
+        stopCallService()
         _peerLeft.value = true
+    }
+
+    private fun startCallService() {
+        val intent = Intent(getApplication(), CallForegroundService::class.java).apply {
+            action = CallForegroundService.ACTION_START
+            putExtra(CallForegroundService.EXTRA_PEER, peer.username)
+        }
+        ContextCompat.startForegroundService(getApplication(), intent)
+    }
+
+    private fun stopCallService() {
+        val intent = Intent(getApplication(), CallForegroundService::class.java).apply {
+            action = CallForegroundService.ACTION_STOP
+        }
+        getApplication<Application>().startService(intent)
     }
 
     override fun onCleared() {
