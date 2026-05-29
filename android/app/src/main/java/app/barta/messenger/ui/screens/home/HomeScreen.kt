@@ -30,6 +30,13 @@ import app.barta.messenger.data.model.OnlineUser
 import app.barta.messenger.ui.components.AvatarView
 import app.barta.messenger.ui.theme.*
 import app.barta.messenger.viewmodel.HomeViewModel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonArray
+import app.barta.messenger.data.network.ApiClient
+import app.barta.messenger.data.network.json
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -270,17 +277,15 @@ fun SearchUserDialog(onDismiss: () -> Unit, onAdd: (OnlineUser) -> Unit) {
                         if (query.isBlank()) return@Button
                         isLoading = true
                         error = ""
-                        scope.kotlinx.coroutines.launch {
+                        scope.launch {
                             try {
-                                val req = okhttp3.Request.Builder().url("${app.barta.messenger.data.network.ApiClient.BASE_URL}/api/search?q=${query.trim()}").build()
-                                val response = kotlinx.coroutines.Dispatchers.IO.let {
-                                    kotlinx.coroutines.withContext(it) { app.barta.messenger.data.network.ApiClient.http.newCall(req).execute() }
-                                }
+                                val req = okhttp3.Request.Builder().url("${ApiClient.BASE_URL}/api/search?q=${query.trim()}").build()
+                                val response = withContext(Dispatchers.IO) { ApiClient.http.newCall(req).execute() }
                                 val body = response.body?.string() ?: ""
                                 if (response.isSuccessful) {
-                                    val obj = app.barta.messenger.data.network.json.parseToJsonElement(body).kotlinx.serialization.json.jsonObject
-                                    val usersArray = obj["users"]?.kotlinx.serialization.json.jsonArray ?: kotlinx.serialization.json.JsonArray(emptyList())
-                                    val parsed = usersArray.map { app.barta.messenger.data.network.json.decodeFromJsonElement(app.barta.messenger.data.model.OnlineUser.serializer(), it) }
+                                    val obj = json.parseToJsonElement(body).jsonObject
+                                    val usersArray = obj["users"]?.jsonArray ?: kotlinx.serialization.json.JsonArray(emptyList())
+                                    val parsed = usersArray.map { json.decodeFromJsonElement(OnlineUser.serializer(), it) }
                                     results = parsed
                                 } else {
                                     error = "Search failed"

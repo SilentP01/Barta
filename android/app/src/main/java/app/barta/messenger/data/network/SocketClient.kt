@@ -60,6 +60,7 @@ class SocketClient {
                 is String  -> "\"$k\":\"${v.replace("\"", "\\\"")}\""
                 is Boolean -> "\"$k\":$v"
                 is Number  -> "\"$k\":$v"
+                is List<*> -> "\"$k\":[${v.joinToString(",") { "\"$it\"" }}]"
                 else       -> "\"$k\":\"$v\""
             }
         }

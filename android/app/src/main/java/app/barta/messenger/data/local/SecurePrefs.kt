@@ -3,6 +3,10 @@ package app.barta.messenger.data.local
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import app.barta.messenger.data.model.OnlineUser
+import app.barta.messenger.data.network.json
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.decodeFromString
 
 object SecurePrefs {
     private const val PREFS_NAME    = "barta_secure_prefs"
@@ -36,19 +40,19 @@ object SecurePrefs {
     fun saveFcmToken(context: Context, token: String) = prefs(context).edit().putString(KEY_FCM, token).apply()
     fun getFcmToken(context: Context) = prefs(context).getString(KEY_FCM, null)
 
-    fun getContacts(context: Context): List<app.barta.messenger.data.model.OnlineUser> {
-        val json = prefs(context).getString(KEY_CONTACTS, "[]") ?: "[]"
+    fun getContacts(context: Context): List<OnlineUser> {
+        val jsonStr = prefs(context).getString(KEY_CONTACTS, "[]") ?: "[]"
         return try {
-            app.barta.messenger.data.network.json.decodeFromString(json)
+            json.decodeFromString(ListSerializer(OnlineUser.serializer()), jsonStr)
         } catch (e: Exception) { emptyList() }
     }
 
-    fun addContact(context: Context, user: app.barta.messenger.data.model.OnlineUser) {
+    fun addContact(context: Context, user: OnlineUser) {
         val current = getContacts(context).toMutableList()
         if (current.none { it.id == user.id }) {
             current.add(user)
-            val json = app.barta.messenger.data.network.json.encodeToString(kotlinx.serialization.builtins.ListSerializer(app.barta.messenger.data.model.OnlineUser.serializer()), current)
-            prefs(context).edit().putString(KEY_CONTACTS, json).apply()
+            val jsonStr = json.encodeToString(ListSerializer(OnlineUser.serializer()), current)
+            prefs(context).edit().putString(KEY_CONTACTS, jsonStr).apply()
         }
     }
 }
