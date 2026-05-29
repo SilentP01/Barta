@@ -143,11 +143,18 @@ fun HomeScreen(
             } else {
                 LazyColumn(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
                     items(filtered, key = { it.id }) { user ->
+                        val isCurrentPeer = (connState as? ConnectionState.Connected)?.peer?.id == user.id
                         UserRow(
                             user = user,
-                            isBusy = user.status == "connected",
+                            isBusy = user.status == "connected" && !isCurrentPeer,
+                            isCurrentPeer = isCurrentPeer,
                             onTap = {
-                                if (user.status == "online") viewModel.sendRequest(user)
+                                if (user.status == "online") {
+                                    viewModel.sendRequest(user)
+                                } else if (isCurrentPeer) {
+                                    val state = connState as ConnectionState.Connected
+                                    onNavigateToChat(user, state.initiator)
+                                }
                             }
                         )
                     }
@@ -158,7 +165,7 @@ fun HomeScreen(
 }
 
 @Composable
-fun UserRow(user: OnlineUser, isBusy: Boolean, onTap: () -> Unit) {
+fun UserRow(user: OnlineUser, isBusy: Boolean, isCurrentPeer: Boolean = false, onTap: () -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -198,7 +205,7 @@ fun UserRow(user: OnlineUser, isBusy: Boolean, onTap: () -> Unit) {
                     color = Teal500.copy(alpha = 0.12f),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("Connect", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    Text(if (isCurrentPeer) "Return" else "Connect", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         color = Teal500, style = MaterialTheme.typography.labelLarge)
                 }
             }
