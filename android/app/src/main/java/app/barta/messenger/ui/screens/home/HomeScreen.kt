@@ -35,6 +35,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.decodeFromJsonElement
 import app.barta.messenger.data.network.ApiClient
 import app.barta.messenger.data.network.json
 
@@ -95,7 +96,6 @@ fun HomeScreen(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
-        },
         },
         floatingActionButton = {
             FloatingActionButton(
@@ -248,6 +248,7 @@ fun IncomingRequestDialog(callerName: String, onAccept: () -> Unit, onReject: ()
         dismissButton = {
             OutlinedButton(onClick = onReject) { Text("Decline") }
         }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
