@@ -43,6 +43,7 @@ dependencies {
     // ── Kotlin core ───────────────────────────────────────────────────────────
     implementation 'androidx.core:core-ktx:1.15.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3'
 
     // ── Jetpack Compose ───────────────────────────────────────────────────────
@@ -88,6 +89,6 @@ dependencies {
     // ── Firebase (BOM keeps all Firebase versions in sync) ───────────────────
     def firebaseBom = platform('com.google.firebase:firebase-bom:33.7.0')
     implementation firebaseBom
-    implementation 'com.google.firebase:firebase-messaging-ktx'
-    implementation 'com.google.firebase:firebase-analytics-ktx'
+    implementation 'com.google.firebase:firebase-messaging'
+    implementation 'com.google.firebase:firebase-analytics'
 }
