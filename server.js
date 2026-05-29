@@ -4,6 +4,23 @@ const http = require("http");
 const https = require("https");
 const path = require("path");
 const { Pool } = require("pg");
+const admin = require("firebase-admin");
+
+// Initialize Firebase Admin SDK for FCM V1
+try {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+    const serviceAccount = JSON.parse(Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, "base64").toString("utf8"));
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+  } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+  } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    admin.initializeApp();
+  }
+} catch (e) {
+  console.log("Firebase Admin not initialized: ", e.message);
+}
+
 
 
 
@@ -183,10 +200,10 @@ function safeUser(user) {
 
 // ── FCM push notification ─────────────────────────────────────────────────────
 async function sendFcmPush(fcmToken, fromUser) {
-  if (!process.env.FCM_SERVER_KEY || !fcmToken) return;
-  const payload = JSON.stringify({
-    to: fcmToken,
-    priority: "high",
+  if (!fcmToken || !admin.apps.length) return;
+
+  const message = {
+    token: fcmToken,
     data: {
       type: "incoming-request",
       fromId: String(fromUser.id),
@@ -198,28 +215,15 @@ async function sendFcmPush(fcmToken, fromUser) {
     },
     android: {
       priority: "high",
-      notification: { channel_id: "barta_calls" }
+      notification: { channelId: "barta_calls" }
     }
-  });
-  return new Promise((resolve) => {
-    const options = {
-      hostname: "fcm.googleapis.com",
-      path: "/fcm/send",
-      method: "POST",
-      headers: {
-        "Authorization": `key=${process.env.FCM_SERVER_KEY}`,
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(payload)
-      }
-    };
-    const req = https.request(options, (resp) => {
-      resp.on("data", () => {});
-      resp.on("end", resolve);
-    });
-    req.on("error", (e) => { console.error("FCM error:", e.message); resolve(); });
-    req.write(payload);
-    req.end();
-  });
+  };
+
+  try {
+    await admin.messaging().send(message);
+  } catch (error) {
+    console.error("FCM error:", error.message);
+  }
 }
 
 
