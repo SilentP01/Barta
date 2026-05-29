@@ -375,68 +375,55 @@ function validatePassword(password) {
   return "";
 }
 
-async function sendMagicLinkEmail(to, subject, link) {
+async function createAndSendMagicLink({ req, userId = null, email, purpose, subject, username = null, passwordHash = null, path }) {
+  await run("DELETE FROM magic_links WHERE expires_at <= $1 OR used_at IS NOT NULL", [Date.now()]);
+  const token = purpose === "signup" || purpose === "password-reset" ? String(Math.floor(100000 + Math.random() * 900000)) : crypto.randomBytes(32).toString("base64url");
+  await run(
+    "INSERT INTO magic_links (id, purpose, user_id, email, username, password_hash, token_hash, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+    [crypto.randomUUID(), purpose, userId, email, username, passwordHash, hashToken(token), Date.now() + MAGIC_LINK_TTL_MS, new Date().toISOString()]
+  );
+  const link = `${getBaseUrl(req)}${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
+  
+  const textContent = `Dear User,\n\nYour verification code is: ${token}\n\nYou can also click this secure link to continue: ${link}\n\nThis will be valid for 10 minutes.`;
+  const htmlContent = `<p>Dear User,</p><h2>Your verification code is: ${token}</h2><p>You can also <a href="${link}">click this secure link to continue</a></p><p>This will be valid for 10 minutes.</p>`;
+
   const provider = String(process.env.EMAIL_PROVIDER || "brevo").toLowerCase();
   const apiKey = process.env.EMAIL_API_KEY;
   const fromEmail = process.env.EMAIL_FROM;
   const fromName = process.env.EMAIL_FROM_NAME || "no-reply.Barta";
   if (!apiKey || !fromEmail) throw new Error("Email service is not configured.");
 
-  const textContent = `Dear User,\nClick this secure link to continue: ${link}\nThis link will be valid for 10 minutes.`;
-  const htmlContent = `<p>Dear User,</p><p><a href="${link}">Click this secure link to continue</a></p><p>This link will be valid for 10 minutes.</p>`;
-
   if (provider === "sendgrid") {
     const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        personalizations: [{ to: [{ email: to }] }],
+        personalizations: [{ to: [{ email: email }] }],
         from: { email: fromEmail, name: fromName },
         subject,
-        content: [
-          { type: "text/plain", value: textContent },
-          { type: "text/html", value: htmlContent }
-        ]
+        content: [{ type: "text/plain", value: textContent }, { type: "text/html", value: htmlContent }]
       })
     });
-    if (!response.ok) throw new Error("Email API failed. Check sender verification and API key.");
+    if (!response.ok) throw new Error("Email API failed.");
     return;
   }
 
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
-    headers: {
-      accept: "application/json",
-      "api-key": apiKey,
-      "Content-Type": "application/json"
-    },
+    headers: { accept: "application/json", "api-key": apiKey, "Content-Type": "application/json" },
     body: JSON.stringify({
       sender: { name: fromName, email: fromEmail },
-      to: [{ email: to }],
+      to: [{ email: email }],
       subject,
       textContent,
       htmlContent
     })
   });
-  if (!response.ok) throw new Error("Email API failed. Check sender verification and API key.");
+  if (!response.ok) throw new Error("Email API failed.");
 }
 
 function emailServiceReady() {
   return Boolean(process.env.EMAIL_API_KEY && process.env.EMAIL_FROM);
-}
-
-async function createAndSendMagicLink({ req, userId = null, email, purpose, subject, username = null, passwordHash = null, path }) {
-  await run("DELETE FROM magic_links WHERE expires_at <= $1 OR used_at IS NOT NULL", [Date.now()]);
-  const token = crypto.randomBytes(32).toString("base64url");
-  await run(
-    "INSERT INTO magic_links (id, purpose, user_id, email, username, password_hash, token_hash, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-    [crypto.randomUUID(), purpose, userId, email, username, passwordHash, hashToken(token), Date.now() + MAGIC_LINK_TTL_MS, new Date().toISOString()]
-  );
-  const link = `${getBaseUrl(req)}${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
-  await sendMagicLinkEmail(email, subject, link);
 }
 
 async function consumeMagicLink(token, purpose) {
@@ -537,6 +524,29 @@ async function handleApi(req, res, url) {
         Location: "/?verified=1"
       });
       return res.end();
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/verify") {
+      if (rateLimit(req, "verify")) return sendError(res, 429, "Too many attempts.");
+      const body = await readBody(req);
+      if (!requireFields(["email", "code"], body)) return sendError(res, 400, "Fill all fields.");
+
+      const result = await consumeMagicLink(String(body.code).trim(), "signup");
+      if (result.error) return sendError(res, 400, result.error);
+      if (result.link.email !== normalizeEmail(body.email)) return sendError(res, 400, "Invalid email.");
+
+      if (await findUserByEmail(result.link.email)) return sendError(res, 409, "Email already registered.");
+      if (await findUserByUsername(result.link.username)) return sendError(res, 409, "Username already taken.");
+
+      const user = {
+        id: crypto.randomUUID(),
+        username: result.link.username,
+        email: result.link.email
+      };
+
+      await createUser({ ...user, passwordHash: result.link.password_hash });
+      const sessionToken = await createSession(user);
+      return sendJsonWithHeaders(res, 200, { user: safeUser(user) }, { "Set-Cookie": `${SESSION_COOKIE}=${sessionToken}; ${cookieOptions(req, SESSION_TTL_MS)}` });
     }
 
     if (req.method === "POST" && url.pathname === "/api/verify-email") {

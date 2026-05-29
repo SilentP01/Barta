@@ -15,7 +15,7 @@ import kotlinx.serialization.encodeToString
 class AuthRepository(private val context: Context) {
 
     suspend fun login(username: String, password: String): Result<User> = runCatching {
-        val resp = ApiClient.post("/api/login", json.encodeToString(LoginRequest(username.trim(), password)))
+        val resp = ApiClient.post("/api/login", json.encodeToString(LoginRequest(identifier = username.trim(), password = password)))
         val text = resp.body?.string() ?: ""
         if (resp.isSuccessful) {
             val user = json.decodeFromString<User>(text)
