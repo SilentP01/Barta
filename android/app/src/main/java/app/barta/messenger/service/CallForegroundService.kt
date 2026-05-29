@@ -23,7 +23,15 @@ class CallForegroundService : Service() {
             ACTION_START -> {
                 val peerName = intent.getStringExtra(EXTRA_PEER) ?: "Peer"
                 val notif = NotificationHelper.buildActiveCallNotification(this, peerName)
-                startForeground(NotificationHelper.NOTIF_ACTIVE_CALL, notif)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    startForeground(
+                        NotificationHelper.NOTIF_ACTIVE_CALL,
+                        notif,
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+                    )
+                } else {
+                    startForeground(NotificationHelper.NOTIF_ACTIVE_CALL, notif)
+                }
             }
             ACTION_STOP -> {
                 stopForeground(STOP_FOREGROUND_REMOVE)
