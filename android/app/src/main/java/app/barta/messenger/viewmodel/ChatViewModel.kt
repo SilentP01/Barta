@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.intOrNull
@@ -79,7 +80,7 @@ class ChatViewModel(
     // ── Text chat ─────────────────────────────────────────────────────────────
 
     fun sendMessage(text: String) {
-        val payload = """{"kind":"message","text":${kotlinx.serialization.json.Json.encodeToString(kotlinx.serialization.json.JsonPrimitive(text))}"""+"}"
+        val payload = """{"kind":"message","text":${kotlinx.serialization.json.Json.encodeToString(text)}}"""
         webRTC.sendText(payload)
         addMessage(ChatMessage.Text(text, fromMe = true))
     }

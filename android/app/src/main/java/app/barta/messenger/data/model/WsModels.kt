@@ -44,7 +44,7 @@ sealed class ConnectionState {
 
 // ── Chat messages ─────────────────────────────────────────────────────────────
 sealed class ChatMessage {
-    data class Text(val text: String, val fromMe: Boolean, val timestamp: Long = System.currentTimeMillis()) : ChatMessage()
-    data class File(val name: String, val size: Long, val mimeType: String, val fromMe: Boolean, val timestamp: Long = System.currentTimeMillis()) : ChatMessage()
-    data class System(val text: String, val timestamp: Long = System.currentTimeMillis()) : ChatMessage()
+    data class Text(val text: String, val fromMe: Boolean, val timestamp: Long = java.lang.System.currentTimeMillis()) : ChatMessage()
+    data class File(val name: String, val size: Long, val mimeType: String, val fromMe: Boolean, val timestamp: Long = java.lang.System.currentTimeMillis()) : ChatMessage()
+    data class System(val text: String, val timestamp: Long = java.lang.System.currentTimeMillis()) : ChatMessage()
 }

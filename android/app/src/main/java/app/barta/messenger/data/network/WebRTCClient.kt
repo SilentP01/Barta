@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
 import org.webrtc.*
 
 enum class CallKind { AUDIO, VIDEO }
@@ -160,18 +161,18 @@ class WebRTCClient(private val context: Context) {
             mandatory += MediaConstraints.KeyValuePair("OfferToReceiveVideo", if (withMedia) "true" else "false")
         }
         pc?.createOffer(object : SimpleSdpObserver() {
-            override fun onCreateSuccess(sdp: SessionDescription) {
+            override fun onCreateSuccess(sdp: SessionDescription?) {
                 pc?.setLocalDescription(SimpleSdpObserver(), sdp)
-                socketClient.sendSignal("""{"type":"offer","sdp":${json.encodeToString(kotlinx.serialization.json.JsonPrimitive(sdp.description))}}""")
+                socketClient.sendSignal("""{"type":"offer","sdp":${json.encodeToString(sdp?.description)}}""")
             }
         }, constraints)
     }
 
     private fun createAnswer() {
         pc?.createAnswer(object : SimpleSdpObserver() {
-            override fun onCreateSuccess(sdp: SessionDescription) {
+            override fun onCreateSuccess(sdp: SessionDescription?) {
                 pc?.setLocalDescription(SimpleSdpObserver(), sdp)
-                socketClient.sendSignal("""{"type":"answer","sdp":${json.encodeToString(kotlinx.serialization.json.JsonPrimitive(sdp.description))}}""")
+                socketClient.sendSignal("""{"type":"answer","sdp":${json.encodeToString(sdp?.description)}}""")
             }
         }, MediaConstraints())
     }

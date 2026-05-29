@@ -17,6 +17,7 @@ import app.barta.messenger.ui.screens.chat.ChatScreen
 import app.barta.messenger.ui.screens.home.HomeScreen
 import app.barta.messenger.ui.screens.profile.ProfileScreen
 import app.barta.messenger.viewmodel.AuthViewModel
+import app.barta.messenger.viewmodel.ChatViewModel
 import app.barta.messenger.viewmodel.ChatViewModelFactory
 import app.barta.messenger.viewmodel.HomeViewModel
 
@@ -116,7 +117,7 @@ fun BartaNavGraph(
             val initiator = back.arguments?.getString("initiator")?.toBoolean() ?: false
             val peer = OnlineUser(id = peerId, username = peerName, status = "connected", avatarUrl = avatar)
 
-            val chatViewModel = viewModel(
+            val chatViewModel: ChatViewModel = viewModel(
                 factory = ChatViewModelFactory(app, peer, initiator)
             )
             ChatScreen(
