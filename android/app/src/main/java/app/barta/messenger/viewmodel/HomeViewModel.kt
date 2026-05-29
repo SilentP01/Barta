@@ -39,7 +39,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     val myUsername = SecurePrefs.getUsername(app)
 
     init {
-        _contacts.value = SecurePrefs.getContacts(app)
+        fetchFriends()
 
         // Observe connection status
         socketClient.connected.onEach { connected ->
@@ -132,11 +132,54 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         else _contacts.value.filter { it.username.lowercase().contains(q) }
     }
 
-    fun addContact(user: OnlineUser) {
-        SecurePrefs.addContact(getApplication(), user)
-        _contacts.value = SecurePrefs.getContacts(getApplication())
-        // Resubscribe
-        socketClient.sendRaw("subscribe", mapOf("ids" to _contacts.value.map { it.id }))
+    fun fetchFriends() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val req = Request.Builder().url("${ApiClient.BASE_URL}/api/friends").get().build()
+                ApiClient.http.newCall(req).execute().use { res ->
+                    if (res.isSuccessful) {
+                        val body = res.body?.string() ?: ""
+                        val friendsResp = app.barta.messenger.data.network.json.decodeFromString(app.barta.messenger.data.model.FriendsResponse.serializer(), body)
+                        _contacts.value = friendsResp.friends
+                        val ids = friendsResp.friends.map { it.id }
+                        if (ids.isNotEmpty()) socketClient.sendRaw("subscribe", mapOf("ids" to ids))
+                    }
+                }
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+    }
+
+    fun sendFriendRequest(userId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val body = """{"to_user_id":"$userId"}""".toRequestBody(JSON_MEDIA)
+                val req = Request.Builder().url("${ApiClient.BASE_URL}/api/friends/request").post(body).build()
+                ApiClient.http.newCall(req).execute().close()
+                fetchFriends()
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+    }
+
+    fun acceptFriendRequest(userId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val body = """{"from_user_id":"$userId"}""".toRequestBody(JSON_MEDIA)
+                val req = Request.Builder().url("${ApiClient.BASE_URL}/api/friends/accept").post(body).build()
+                ApiClient.http.newCall(req).execute().close()
+                fetchFriends()
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+    }
+
+    fun removeFriend(userId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val body = """{"peer_id":"$userId"}""".toRequestBody(JSON_MEDIA)
+                val req = Request.Builder().url("${ApiClient.BASE_URL}/api/friends/remove").post(body).build()
+                ApiClient.http.newCall(req).execute().close()
+                fetchFriends()
+            } catch (e: Exception) { e.printStackTrace() }
+        }
     }
 
     private fun registerFcmToken() {

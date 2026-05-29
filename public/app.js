@@ -237,6 +237,7 @@ function showApp() {
   currentUser.textContent = `@${me.username}`;
   showSidebar();
   connectSocket();
+  fetchFriends();
   if (location.pathname !== "/") history.pushState({}, "", "/");
 }
 
@@ -300,70 +301,125 @@ function switchAuth(mode) {
   setNotice();
 }
 
-let localFriends = JSON.parse(localStorage.getItem("barta_friends") || "[]");
-
-function updateFriendsSubscription() {
-  if (socket?.readyState === WebSocket.OPEN) {
-    sendSocket("subscribe", { ids: localFriends.map(f => f.id) });
+let currentFriends = [];
+function resubscribe() {
+  if (socket && socket.readyState === WebSocket.OPEN && currentFriends.length) {
+    sendSocket("subscribe", { ids: currentFriends.map(f => f.id) });
   }
 }
 
-function addFriend(id, username) {
-  if (!localFriends.find(f => f.id === id)) {
-    localFriends.push({ id, username });
-    localStorage.setItem("barta_friends", JSON.stringify(localFriends));
-    updateFriendsSubscription();
+async function fetchFriends() {
+  try {
+    const res = await fetch("/api/friends");
+    if (res.ok) {
+      const data = await res.json();
+      currentFriends = data.friends;
+      resubscribe();
+      renderUsers([]); // Render offline initially, presence will update soon
+    }
+  } catch (e) {
+    console.error("Failed to load friends", e);
   }
+}
+
+async function sendFriendRequest(userId) {
+  await postJson("/api/friends/request", { to_user_id: userId });
+  fetchFriends();
+}
+
+async function acceptFriendRequest(userId) {
+  await postJson("/api/friends/accept", { from_user_id: userId });
+  fetchFriends();
+}
+
+async function removeFriend(userId) {
+  await postJson("/api/friends/remove", { peer_id: userId });
+  fetchFriends();
 }
 
 function renderUsers(onlineUsers = []) {
   userList.innerHTML = "";
-  if (!localFriends.length) {
-    userList.innerHTML = '<p class="muted">No friends yet. Search to add.</p>';
+  if (!currentFriends.length) {
+    userList.innerHTML = '<p class="muted" style="text-align: center; padding: 2rem 1rem;">No friends yet. Search to add.</p>';
     return;
   }
   
-  const friendsWithStatus = localFriends.map(f => {
+  const friendsWithStatus = currentFriends.map(f => {
     const onlineUser = onlineUsers.find(u => u.id === f.id);
     return { ...f, status: onlineUser ? onlineUser.status : "offline" };
   });
 
-  for (const user of friendsWithStatus) {
-    const row = document.createElement("div");
-    row.className = "user-row";
-    row.innerHTML = `
-      <div>
-        <strong>@${escapeHtml(user.username)}</strong>
-        <div class="status ${user.status}">${user.status}</div>
-      </div>
-    `;
-    if (user.status === "online") {
-      if (!currentPeer) {
-        const button = document.createElement("button");
-        button.className = "secondary";
-        button.textContent = "Request";
-        button.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (isMobileDevice && !isNativeBarta) showPrivacyWarningToast();
-          sendSocket("request", { to: user.id });
-        });
-        row.appendChild(button);
-      } else {
-        row.style.cursor = "pointer";
-        row.addEventListener("click", () => {
-          if (currentPeer.id === user.id) {
-            showWorkspace();
-          } else {
-            if (confirm(`Disconnect from @${currentPeer.username} to connect to @${user.username}?`)) {
-              resetPeer();
-              if (isMobileDevice && !isNativeBarta) showPrivacyWarningToast();
-              sendSocket("request", { to: user.id });
-            }
-          }
-        });
-      }
+  const requests = friendsWithStatus.filter(f => f.friendship_status === "pending" && f.is_incoming);
+  const accepted = friendsWithStatus.filter(f => f.friendship_status === "accepted");
+
+  if (requests.length) {
+    const reqHeader = document.createElement("div");
+    reqHeader.className = "section-title";
+    reqHeader.textContent = "Friend Requests";
+    userList.appendChild(reqHeader);
+    
+    for (const user of requests) {
+      const row = document.createElement("div");
+      row.className = "user-row";
+      row.innerHTML = `
+        <div>
+          <strong>@${escapeHtml(user.username)}</strong>
+        </div>
+        <div style="display: flex; gap: 4px;">
+          <button class="primary" style="padding: 4px 8px; font-size: 12px;">Accept</button>
+          <button class="ghost" style="padding: 4px 8px; font-size: 12px; color: var(--error)">Decline</button>
+        </div>
+      `;
+      row.querySelectorAll("button")[0].onclick = () => acceptFriendRequest(user.id);
+      row.querySelectorAll("button")[1].onclick = () => removeFriend(user.id);
+      userList.appendChild(row);
     }
-    userList.appendChild(row);
+  }
+
+  if (accepted.length) {
+    if (requests.length) {
+      const divider = document.createElement("hr");
+      divider.style.opacity = "0.2";
+      userList.appendChild(divider);
+    }
+    
+    for (const user of accepted) {
+      const row = document.createElement("div");
+      row.className = "user-row";
+      row.innerHTML = `
+        <div>
+          <strong>@${escapeHtml(user.username)}</strong>
+          <div class="status ${user.status}">${user.status}</div>
+        </div>
+      `;
+      if (user.status === "online") {
+        if (!currentPeer) {
+          const button = document.createElement("button");
+          button.className = "secondary";
+          button.textContent = "Request";
+          button.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (isMobileDevice && !isNativeBarta) showPrivacyWarningToast();
+            sendSocket("request", { to: user.id });
+          });
+          row.appendChild(button);
+        } else {
+          row.style.cursor = "pointer";
+          row.addEventListener("click", () => {
+            if (currentPeer.id === user.id) {
+              showWorkspace();
+            } else {
+              if (confirm(`Disconnect from @${currentPeer.username} to connect to @${user.username}?`)) {
+                resetPeer();
+                if (isMobileDevice && !isNativeBarta) showPrivacyWarningToast();
+                sendSocket("request", { to: user.id });
+              }
+            }
+          });
+        }
+      }
+      userList.appendChild(row);
+    }
   }
 }
 
@@ -1817,6 +1873,8 @@ refreshBtn.addEventListener("click", () => {
   refreshBtn.classList.add("syncing");
   setTimeout(() => refreshBtn.classList.remove("syncing"), 600);
 
+  fetchFriends();
+  
   if (socket?.readyState === WebSocket.OPEN) {
     sendSocket("refresh-presence");
   } else {

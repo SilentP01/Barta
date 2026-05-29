@@ -31,8 +31,16 @@ data class OnlineUser(
     val id: String,
     val username: String,
     val status: String,
-    val avatarUrl: String? = null
+    val avatarUrl: String? = null,
+    val friendship_status: String = "none",
+    val is_incoming: Boolean = false
 )
+
+@Serializable
+data class FriendsResponse(val friends: List<OnlineUser>)
+
+@Serializable
+data class SearchResponse(val users: List<OnlineUser>)
 
 sealed class Result<out T> {
     data class Success<T>(val data: T) : Result<T>()

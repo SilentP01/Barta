@@ -111,7 +111,7 @@ fun HomeScreen(
             SearchUserDialog(
                 onDismiss = { showSearchDialog = false },
                 onAdd = { user ->
-                    viewModel.addContact(user)
+                    viewModel.sendFriendRequest(user.id)
                     showSearchDialog = false
                 }
             )
@@ -149,19 +149,41 @@ fun HomeScreen(
                 )
             )
 
+            val requests = filtered.filter { it.friendship_status == "pending" && it.is_incoming }
+            val accepted = filtered.filter { it.friendship_status == "accepted" }
             if (contacts.isEmpty()) {
                 // Empty state
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("👋", fontSize = 48.sp)
                         Spacer(Modifier.height(12.dp))
-                        Text("No contacts yet\nTap the search button to find friends", style = MaterialTheme.typography.bodyMedium,
+                        Text("No friends yet\nTap the search button to find friends", style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                     }
                 }
             } else {
                 LazyColumn(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
-                    items(filtered, key = { it.id }) { user ->
+                    if (requests.isNotEmpty()) {
+                        item {
+                            Text("Friend Requests", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
+                        }
+                        items(requests, key = { "req_${it.id}" }) { user ->
+                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                AvatarView(user.username, user.avatarUrl, 48.dp)
+                                Spacer(Modifier.width(14.dp))
+                                Text(user.username, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                                TextButton(onClick = { viewModel.acceptFriendRequest(user.id) }) { Text("Accept", color = Teal500) }
+                                TextButton(onClick = { viewModel.removeFriend(user.id) }) { Text("Decline", color = MaterialTheme.colorScheme.error) }
+                            }
+                        }
+                        item { Spacer(Modifier.height(16.dp)) }
+                    }
+                    if (accepted.isNotEmpty()) {
+                        item {
+                            Text("Friends", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
+                        }
+                    }
+                    items(accepted, key = { it.id }) { user ->
                         val isCurrentPeer = (connState as? ConnectionState.Connected)?.peer?.id == user.id
                         UserRow(
                             user = user,
@@ -320,8 +342,16 @@ fun SearchUserDialog(onDismiss: () -> Unit, onAdd: (OnlineUser) -> Unit) {
                             AvatarView(user.username, user.avatarUrl, 40.dp)
                             Spacer(Modifier.width(12.dp))
                             Text(user.username, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { onAdd(user) }) {
-                                Text("Add", color = Teal500)
+                            if (user.friendship_status == "none") {
+                                TextButton(onClick = { onAdd(user) }) {
+                                    Text("Add Friend", color = Teal500)
+                                }
+                            } else if (user.friendship_status == "accepted") {
+                                Text("Friends", color = Teal500, style = MaterialTheme.typography.labelMedium)
+                            } else if (user.is_incoming) {
+                                Text("Wants to connect", color = Teal500, style = MaterialTheme.typography.labelMedium)
+                            } else {
+                                Text("Pending", color = Teal500, style = MaterialTheme.typography.labelMedium)
                             }
                         }
                     }

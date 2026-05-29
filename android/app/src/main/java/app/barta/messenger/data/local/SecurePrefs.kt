@@ -39,20 +39,4 @@ object SecurePrefs {
     fun saveAvatarUrl(context: Context, url: String) = prefs(context).edit().putString(KEY_AVATAR, url).apply()
     fun saveFcmToken(context: Context, token: String) = prefs(context).edit().putString(KEY_FCM, token).apply()
     fun getFcmToken(context: Context) = prefs(context).getString(KEY_FCM, null)
-
-    fun getContacts(context: Context): List<OnlineUser> {
-        val jsonStr = prefs(context).getString(KEY_CONTACTS, "[]") ?: "[]"
-        return try {
-            json.decodeFromString(ListSerializer(OnlineUser.serializer()), jsonStr)
-        } catch (e: Exception) { emptyList() }
-    }
-
-    fun addContact(context: Context, user: OnlineUser) {
-        val current = getContacts(context).toMutableList()
-        if (current.none { it.id == user.id }) {
-            current.add(user)
-            val jsonStr = json.encodeToString(ListSerializer(OnlineUser.serializer()), current)
-            prefs(context).edit().putString(KEY_CONTACTS, jsonStr).apply()
-        }
-    }
 }

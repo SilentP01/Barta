@@ -9,6 +9,8 @@ class BartaApplication : Application() {
         super.onCreate()
         // Initialize Firebase
         FirebaseApp.initializeApp(this)
+        // Initialize API Client cookies
+        app.barta.messenger.data.network.ApiClient.init(this)
         // Create notification channels (must be done before any notification is shown)
         NotificationHelper.createChannels(this)
     }

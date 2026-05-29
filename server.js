@@ -129,6 +129,15 @@ async function initDatabase() {
       expires_at BIGINT NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS friends (
+      user_id_1 TEXT NOT NULL,
+      user_id_2 TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at BIGINT NOT NULL,
+      PRIMARY KEY (user_id_1, user_id_2),
+      FOREIGN KEY (user_id_1) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id_2) REFERENCES users(id) ON DELETE CASCADE
+    );
   `).catch(() => {});
 }
 
@@ -738,6 +747,70 @@ async function handleApi(req, res, url) {
       return sendError(res, 410, "Use the password reset magic link sent to your email.");
     }
 
+    if (req.method === "POST" && url.pathname === "/api/friends/request") {
+      const user = await getSessionUser(req);
+      if (!user) return sendError(res, 401, "Unauthorized");
+      const body = await readBody(req);
+      const toUserId = body.to_user_id;
+      if (!toUserId || toUserId === user.id) return sendError(res, 400, "Invalid user");
+      const targetUser = await findUserById(toUserId);
+      if (!targetUser) return sendError(res, 404, "User not found");
+
+      const existing = await one("SELECT * FROM friends WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)", [user.id, targetUser.id]);
+      if (existing) return sendError(res, 400, "Request already exists or you are already friends.");
+
+      await run("INSERT INTO friends (user_id_1, user_id_2, status, created_at) VALUES ($1, $2, 'pending', $3)", [user.id, targetUser.id, Date.now()]);
+      return sendJson(res, 200, { ok: true, message: "Friend request sent." });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/friends/accept") {
+      const user = await getSessionUser(req);
+      if (!user) return sendError(res, 401, "Unauthorized");
+      const body = await readBody(req);
+      const fromUserId = body.from_user_id;
+      
+      const reqRow = await one("SELECT * FROM friends WHERE user_id_1 = $1 AND user_id_2 = $2 AND status = 'pending'", [fromUserId, user.id]);
+      if (!reqRow) return sendError(res, 404, "Friend request not found.");
+
+      await run("UPDATE friends SET status = 'accepted' WHERE user_id_1 = $1 AND user_id_2 = $2", [fromUserId, user.id]);
+      return sendJson(res, 200, { ok: true, message: "Friend request accepted." });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/friends/remove") {
+      const user = await getSessionUser(req);
+      if (!user) return sendError(res, 401, "Unauthorized");
+      const body = await readBody(req);
+      const peerId = body.peer_id;
+      
+      await run("DELETE FROM friends WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)", [user.id, peerId]);
+      return sendJson(res, 200, { ok: true, message: "Removed." });
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/friends") {
+      const user = await getSessionUser(req);
+      if (!user) return sendError(res, 401, "Unauthorized");
+
+      const friendsRes = await pool.query(`
+        SELECT u.id, u.username, f.status, f.user_id_1, f.user_id_2
+        FROM friends f
+        JOIN users u ON (u.id = f.user_id_1 OR u.id = f.user_id_2)
+        WHERE (f.user_id_1 = $1 OR f.user_id_2 = $1) AND u.id != $1
+      `, [user.id]);
+      
+      const friends = friendsRes.rows.map(r => {
+        const live = online.get(r.id);
+        return {
+          id: r.id,
+          username: r.username,
+          status: live ? live.status : "offline",
+          friendship_status: r.status,
+          is_incoming: r.user_id_1 !== user.id
+        };
+      });
+
+      return sendJson(res, 200, { friends });
+    }
+
     if (req.method === "GET" && url.pathname === "/api/search") {
       if (rateLimit(req, "search")) return sendError(res, 429, "Too many searches. Try again in a minute.");
 
@@ -747,12 +820,23 @@ async function handleApi(req, res, url) {
       const q = url.searchParams.get("q");
       if (q) {
         const users = await pool.query("SELECT id, username FROM users WHERE username ILIKE $1 OR email ILIKE $1 LIMIT 20", [`%${q}%`]);
+        const friendsRes = await pool.query(`SELECT user_id_1, user_id_2, status FROM friends WHERE user_id_1 = $1 OR user_id_2 = $1`, [sessionUser.id]);
+        
         const mappedUsers = users.rows.map(u => {
           const live = online.get(u.id);
+          let fStatus = "none";
+          let isIncoming = false;
+          const fRow = friendsRes.rows.find(r => r.user_id_1 === u.id || r.user_id_2 === u.id);
+          if (fRow) {
+            fStatus = fRow.status;
+            isIncoming = fRow.user_id_1 === u.id;
+          }
           return {
             id: u.id,
             username: u.username,
-            status: live ? live.status : "offline"
+            status: live ? live.status : "offline",
+            friendship_status: fStatus,
+            is_incoming: isIncoming
           };
         });
         return sendJson(res, 200, { users: mappedUsers });
