@@ -18,7 +18,7 @@ data class AuthResponse(val user: User)
 data class LoginRequest(val identifier: String, val password: String)
 
 @Serializable
-data class SignupRequest(val username: String, val email: String, val password: String)
+data class SignupRequest(val username: String, val email: String, val password: String, val passwordConfirm: String)
 
 @Serializable
 data class VerifyRequest(val email: String, val code: String)

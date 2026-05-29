@@ -37,10 +37,10 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun signup(username: String, email: String, password: String) {
+    fun signup(username: String, email: String, password: String, passwordConfirm: String) {
         _state.value = AuthUiState.Loading
         viewModelScope.launch {
-            when (val r = repo.signup(username, email, password)) {
+            when (val r = repo.signup(username, email, password, passwordConfirm)) {
                 is Result.Success -> { pendingEmail = r.data; _state.value = AuthUiState.NeedsVerify(r.data) }
                 is Result.Error   -> _state.value = AuthUiState.Error(r.message)
                 else -> {}

@@ -27,8 +27,8 @@ class AuthRepository(private val context: Context) {
         }
     }.getOrElse { Result.Error(it.message ?: "Network error.") }
 
-    suspend fun signup(username: String, email: String, password: String): Result<String> = runCatching {
-        val resp = ApiClient.post("/api/signup", json.encodeToString(SignupRequest(username.trim(), email.trim(), password)))
+    suspend fun signup(username: String, email: String, password: String, passwordConfirm: String): Result<String> = runCatching {
+        val resp = ApiClient.post("/api/signup", json.encodeToString(SignupRequest(username.trim(), email.trim(), password, passwordConfirm)))
         val text = resp.body?.string() ?: ""
         if (resp.isSuccessful) Result.Success(email.trim())
         else Result.Error(runCatching { json.decodeFromString<ApiError>(text).error }.getOrDefault("Signup failed."))

@@ -52,7 +52,7 @@ fun SignupScreen(
         errorMsg = ""
         if (username.isBlank() || email.isBlank() || password.isBlank()) { errorMsg = "All fields are required."; return }
         if (password != confirm) { errorMsg = "Passwords don't match."; return }
-        viewModel.signup(username, email, password)
+        viewModel.signup(username, email, password, confirm)
     }
 
     Box(modifier = Modifier.fillMaxSize()
