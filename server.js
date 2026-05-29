@@ -198,6 +198,10 @@ function safeUser(user) {
   return { id: user.id, username: user.username };
 }
 
+function safeSelfUser(user) {
+  return { id: user.id, username: user.username, email: user.email };
+}
+
 // ── FCM push notification ─────────────────────────────────────────────────────
 async function sendFcmPush(fcmToken, fromUser) {
   if (!fcmToken || !admin.apps.length) return;
@@ -546,7 +550,7 @@ async function handleApi(req, res, url) {
 
       await createUser({ ...user, passwordHash: result.link.password_hash });
       const sessionToken = await createSession(user);
-      return sendJsonWithHeaders(res, 200, { user: safeUser(user) }, { "Set-Cookie": `${SESSION_COOKIE}=${sessionToken}; ${cookieOptions(req, SESSION_TTL_MS)}` });
+      return sendJsonWithHeaders(res, 200, { user: safeSelfUser(user) }, { "Set-Cookie": `${SESSION_COOKIE}=${sessionToken}; ${cookieOptions(req, SESSION_TTL_MS)}` });
     }
 
     if (req.method === "POST" && url.pathname === "/api/verify-email") {
@@ -595,7 +599,7 @@ async function handleApi(req, res, url) {
       if (!await verifyPassword(body.password, user.password_hash)) return sendError(res, 401, "Invalid login.");
 
       const token = await createSession(user);
-      return sendJsonWithHeaders(res, 200, { user: safeUser(user) }, { "Set-Cookie": `${SESSION_COOKIE}=${token}; ${cookieOptions(req, SESSION_TTL_MS)}` });
+      return sendJsonWithHeaders(res, 200, { user: safeSelfUser(user) }, { "Set-Cookie": `${SESSION_COOKIE}=${token}; ${cookieOptions(req, SESSION_TTL_MS)}` });
     }
 
     if (req.method === "POST" && url.pathname === "/api/logout") {
@@ -642,6 +646,12 @@ async function handleApi(req, res, url) {
 
       await updateUserPassword(await hashPassword(body.password), user.id);
       return sendJson(res, 200, { ok: true });
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/me") {
+      const user = await authenticate(req);
+      if (!user) return sendError(res, 401, "Unauthorized.");
+      return sendJson(res, 200, { user: safeSelfUser(user) });
     }
 
     if (req.method === "GET" && url.pathname === "/api/session") {

@@ -18,7 +18,8 @@ class AuthRepository(private val context: Context) {
         val resp = ApiClient.post("/api/login", json.encodeToString(LoginRequest(identifier = username.trim(), password = password)))
         val text = resp.body?.string() ?: ""
         if (resp.isSuccessful) {
-            val user = json.decodeFromString<User>(text)
+            val authResp = json.decodeFromString<app.barta.messenger.data.model.AuthResponse>(text)
+            val user = authResp.user
             SecurePrefs.saveSession(context, user.id, user.username, user.email)
             Result.Success(user)
         } else {
@@ -37,7 +38,8 @@ class AuthRepository(private val context: Context) {
         val resp = ApiClient.post("/api/verify", json.encodeToString(VerifyRequest(email, code)))
         val text = resp.body?.string() ?: ""
         if (resp.isSuccessful) {
-            val user = json.decodeFromString<User>(text)
+            val authResp = json.decodeFromString<app.barta.messenger.data.model.AuthResponse>(text)
+            val user = authResp.user
             SecurePrefs.saveSession(context, user.id, user.username, user.email)
             Result.Success(user)
         } else {
@@ -49,7 +51,8 @@ class AuthRepository(private val context: Context) {
         val resp = ApiClient.get("/api/me")
         val text = resp.body?.string() ?: ""
         if (resp.isSuccessful) {
-            val user = json.decodeFromString<User>(text)
+            val authResp = json.decodeFromString<app.barta.messenger.data.model.AuthResponse>(text)
+            val user = authResp.user
             SecurePrefs.saveSession(context, user.id, user.username, user.email)
             Result.Success(user)
         } else {

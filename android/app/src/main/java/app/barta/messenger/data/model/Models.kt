@@ -12,6 +12,9 @@ data class User(
 )
 
 @Serializable
+data class AuthResponse(val user: User)
+
+@Serializable
 data class LoginRequest(val identifier: String, val password: String)
 
 @Serializable
