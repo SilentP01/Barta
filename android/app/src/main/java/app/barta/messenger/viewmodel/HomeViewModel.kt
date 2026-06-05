@@ -73,10 +73,16 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 val updatedUsers = msg.users ?: emptyList()
                 _contacts.value = _contacts.value.map { contact ->
                     val update = updatedUsers.find { it.id == contact.id }
-                    update ?: contact // Fallback to last known if not in update (shouldn't happen, but safe)
+                    if (update != null) contact.copy(status = update.status) else contact
                 }
                 if (_connState.value !is ConnectionState.Connected)
                     _connState.value = ConnectionState.Online
+            }
+            "friend-updated" -> {
+                fetchFriends()
+            }
+            "error-message" -> {
+                // handle error message gracefully if needed
             }
             "incoming-request" -> {
                 val from = msg.from ?: return

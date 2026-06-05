@@ -760,6 +760,10 @@ async function handleApi(req, res, url) {
       if (existing) return sendError(res, 400, "Request already exists or you are already friends.");
 
       await run("INSERT INTO friends (user_id_1, user_id_2, status, created_at) VALUES ($1, $2, 'pending', $3)", [user.id, targetUser.id, Date.now()]);
+      
+      const targetWs = online.get(targetUser.id);
+      if (targetWs) send(targetWs.ws, "friend-updated", {});
+
       return sendJson(res, 200, { ok: true, message: "Friend request sent." });
     }
 
@@ -773,6 +777,10 @@ async function handleApi(req, res, url) {
       if (!reqRow) return sendError(res, 404, "Friend request not found.");
 
       await run("UPDATE friends SET status = 'accepted' WHERE user_id_1 = $1 AND user_id_2 = $2", [fromUserId, user.id]);
+
+      const fromWs = online.get(fromUserId);
+      if (fromWs) send(fromWs.ws, "friend-updated", {});
+
       return sendJson(res, 200, { ok: true, message: "Friend request accepted." });
     }
 
@@ -783,6 +791,10 @@ async function handleApi(req, res, url) {
       const peerId = body.peer_id;
       
       await run("DELETE FROM friends WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)", [user.id, peerId]);
+
+      const peerWs = online.get(peerId);
+      if (peerWs) send(peerWs.ws, "friend-updated", {});
+
       return sendJson(res, 200, { ok: true, message: "Removed." });
     }
 

@@ -29,8 +29,8 @@ data class ApiError(val error: String = "Something went wrong.")
 @Serializable
 data class OnlineUser(
     val id: String,
-    val username: String,
-    val status: String,
+    val username: String = "",
+    val status: String = "offline",
     val avatarUrl: String? = null,
     val friendship_status: String = "none",
     val is_incoming: Boolean = false

@@ -539,6 +539,7 @@ function connectSocket() {
 
     if (message.type === "presence") renderUsers(message.users);
     if (message.type === "presence-update") sendSocket("refresh-presence");
+    if (message.type === "friend-updated") fetchFriends();
     if (message.type === "incoming-request") renderRequest(message.from);
     if (message.type === "request-sent") searchResult.textContent = `Request sent to @${message.to.username}`;
     if (message.type === "request-rejected") searchResult.textContent = `@${message.by.username} rejected the request`;
