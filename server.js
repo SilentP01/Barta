@@ -87,6 +87,13 @@ pool.on("error", (err) => {
   alertWebhook("PostgreSQL pool error", { message: err.message });
 });
 
+// ─── Map Cleanup ────────────────────────────────────────────────────────────
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of rateLimits.entries()) if (v.resetAt <= now) rateLimits.delete(k);
+  for (const [k, v] of wsRateLimits.entries()) if (v.resetAt <= now) wsRateLimits.delete(k);
+}, 60 * 1000).unref();
+
 // ─── WebSocket per-user rate limiter ────────────────────────────────────────
 function wsRateLimit(userId) {
   const now = Date.now();
