@@ -10,7 +10,7 @@ data class RtcSignal(
     val sdp: String? = null,      // for offer / answer
     val candidate: String? = null,// for candidate
     val sdpMid: String? = null,
-    val sdpMLineIndex: Int? = null
+    val sdpMLineIndex: Int? = null,
 )
 
 @Serializable
@@ -26,7 +26,7 @@ data class WsMessage(
     val by: OnlineUser? = null,
     val accept: Boolean? = null,
     // signalling
-    val signal: kotlinx.serialization.json.JsonElement? = null,
+    val signal: JsonElement? = null,
     // generic
     val error: String? = null,
     val message: String? = null

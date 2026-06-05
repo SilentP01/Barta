@@ -1,16 +1,17 @@
 package app.barta.messenger.viewmodel
 
 import android.app.Application
-import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import app.barta.messenger.util.NetworkMonitor
 import androidx.lifecycle.viewModelScope
 import app.barta.messenger.data.local.SecurePrefs
 import app.barta.messenger.data.model.ConnectionState
+import app.barta.messenger.data.model.FriendsResponse
 import app.barta.messenger.data.model.OnlineUser
 import app.barta.messenger.data.model.WsMessage
 import app.barta.messenger.data.network.ApiClient
 import app.barta.messenger.data.network.JSON_MEDIA
+import app.barta.messenger.data.network.json
 import app.barta.messenger.data.network.socketClient
 import app.barta.messenger.util.NotificationHelper
 import com.google.firebase.messaging.FirebaseMessaging
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.serialization.decodeFromString
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
@@ -105,7 +107,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 NotificationHelper.showIncomingCallNotification(
                     context    = getApplication(),
                     callerName = from.username,
-                    callerId   = from.id.toString()
+                    callerId   = from.id
                 )
             }
             "request-sent"     -> { /* initiator side — state already set in sendRequest */ }
@@ -160,7 +162,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 ApiClient.http.newCall(req).execute().use { res ->
                     if (res.isSuccessful) {
                         val body = res.body?.string() ?: ""
-                        val friendsResp = app.barta.messenger.data.network.json.decodeFromString(app.barta.messenger.data.model.FriendsResponse.serializer(), body)
+                        val friendsResp = json.decodeFromString<FriendsResponse>(body)
                         _contacts.value = friendsResp.friends
                         val ids = friendsResp.friends.map { it.id }
                         if (ids.isNotEmpty()) socketClient.sendRaw("subscribe", mapOf("ids" to ids))

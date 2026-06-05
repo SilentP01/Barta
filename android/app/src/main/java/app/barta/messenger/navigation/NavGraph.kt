@@ -97,14 +97,7 @@ fun BartaNavGraph(
                         launchSingleTop = true
                     }
                 },
-                onNavigateToProfile = { navController.navigate(Screen.Profile.route) },
-                onLogout = {
-                    authViewModel.logout()
-                    socketClient.disconnect()
-                    navController.navigate(Screen.Login.route) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                }
+                onNavigateToProfile = { navController.navigate(Screen.Profile.route) }
             )
         }
 

@@ -38,7 +38,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.decodeFromJsonElement
 import app.barta.messenger.data.network.ApiClient
 import app.barta.messenger.data.network.json
 
@@ -47,8 +46,7 @@ import app.barta.messenger.data.network.json
 fun HomeScreen(
     viewModel: HomeViewModel = viewModel(),
     onNavigateToChat: (OnlineUser, Boolean) -> Unit,
-    onNavigateToProfile: () -> Unit,
-    onLogout: () -> Unit
+    onNavigateToProfile: () -> Unit
 ) {
     val contacts   by viewModel.contacts.collectAsStateWithLifecycle()
     val connState  by viewModel.connState.collectAsStateWithLifecycle()
@@ -56,8 +54,7 @@ fun HomeScreen(
     val query      by viewModel.searchQuery.collectAsStateWithLifecycle()
     val filtered   = remember(contacts, query) { viewModel.filteredContacts() }
     var showSearchDialog by remember { mutableStateOf(false) }
-    val isOnline by NetworkMonitor.observe(androidx.compose.ui.platform.LocalContext.current)
-        .collectAsState(initial = true)
+    val isOnline   by viewModel.isOnline.collectAsState(initial = true)
 
     // Incoming request dialog
     if (connState is ConnectionState.PeerRequesting) {
@@ -168,7 +165,7 @@ fun HomeScreen(
                 )
             )
 
-            val requests = filtered.filter { it.friendship_status == "pending" && it.is_incoming }
+            val requests = filtered.filter { (it.friendship_status == "pending") && it.is_incoming }
             val accepted = filtered.filter { it.friendship_status == "accepted" }
             if (contacts.isEmpty()) {
                 // Empty state
@@ -176,8 +173,12 @@ fun HomeScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("👋", fontSize = 48.sp)
                         Spacer(Modifier.height(12.dp))
-                        Text("No friends yet\nTap the search button to find friends", style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                        Text(
+                            text = "No friends yet\nTap the search button to find friends",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             } else {
