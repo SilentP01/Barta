@@ -189,6 +189,17 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun blockUser(userId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val body = """{"peer_id":"$userId"}""".toRequestBody(JSON_MEDIA)
+                val req = Request.Builder().url("${ApiClient.BASE_URL}/api/friends/block").post(body).build()
+                ApiClient.http.newCall(req).execute().close()
+                fetchFriends()
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+    }
+
     private fun registerFcmToken() {
         viewModelScope.launch {
             try {

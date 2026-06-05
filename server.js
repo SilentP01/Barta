@@ -138,6 +138,14 @@ async function initDatabase() {
       FOREIGN KEY (user_id_1) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id_2) REFERENCES users(id) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS blocks (
+      blocker_id TEXT NOT NULL,
+      blocked_id TEXT NOT NULL,
+      created_at BIGINT NOT NULL,
+      PRIMARY KEY (blocker_id, blocked_id),
+      FOREIGN KEY (blocker_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (blocked_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `).catch(() => {});
 }
 
@@ -756,6 +764,9 @@ async function handleApi(req, res, url) {
       const targetUser = await findUserById(toUserId);
       if (!targetUser) return sendError(res, 404, "User not found");
 
+      const block = await one("SELECT * FROM blocks WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1)", [user.id, targetUser.id]);
+      if (block) return sendError(res, 400, "Cannot send request to this user.");
+
       const existing = await one("SELECT * FROM friends WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)", [user.id, targetUser.id]);
       if (existing) return sendError(res, 400, "Request already exists or you are already friends.");
 
@@ -798,6 +809,46 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, { ok: true, message: "Removed." });
     }
 
+    if (req.method === "POST" && url.pathname === "/api/friends/block") {
+      const user = await getSessionUser(req);
+      if (!user) return sendError(res, 401, "Unauthorized");
+      const body = await readBody(req);
+      const peerId = body.peer_id;
+      
+      await run("DELETE FROM friends WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)", [user.id, peerId]);
+      await run("INSERT INTO blocks (blocker_id, blocked_id, created_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", [user.id, peerId, Date.now()]);
+
+      const peerWs = online.get(peerId);
+      if (peerWs) send(peerWs.ws, "friend-updated", {});
+
+      return sendJson(res, 200, { ok: true, message: "Blocked." });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/friends/unblock") {
+      const user = await getSessionUser(req);
+      if (!user) return sendError(res, 401, "Unauthorized");
+      const body = await readBody(req);
+      const peerId = body.peer_id;
+      
+      await run("DELETE FROM blocks WHERE blocker_id = $1 AND blocked_id = $2", [user.id, peerId]);
+
+      return sendJson(res, 200, { ok: true, message: "Unblocked." });
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/blocks") {
+      const user = await getSessionUser(req);
+      if (!user) return sendError(res, 401, "Unauthorized");
+
+      const blocksRes = await pool.query(`
+        SELECT u.id, u.username
+        FROM blocks b
+        JOIN users u ON u.id = b.blocked_id
+        WHERE b.blocker_id = $1
+      `, [user.id]);
+      
+      return sendJson(res, 200, { blocks: blocksRes.rows });
+    }
+
     if (req.method === "GET" && url.pathname === "/api/friends") {
       const user = await getSessionUser(req);
       if (!user) return sendError(res, 401, "Unauthorized");
@@ -811,10 +862,11 @@ async function handleApi(req, res, url) {
       
       const friends = friendsRes.rows.map(r => {
         const live = online.get(r.id);
+        const showOnline = r.status === "accepted";
         return {
           id: r.id,
           username: r.username,
-          status: live ? live.status : "offline",
+          status: live && showOnline ? live.status : "offline",
           friendship_status: r.status,
           is_incoming: r.user_id_1 !== user.id
         };
@@ -833,8 +885,11 @@ async function handleApi(req, res, url) {
       if (q) {
         const users = await pool.query("SELECT id, username FROM users WHERE username ILIKE $1 OR email ILIKE $1 LIMIT 20", [`%${q}%`]);
         const friendsRes = await pool.query(`SELECT user_id_1, user_id_2, status FROM friends WHERE user_id_1 = $1 OR user_id_2 = $1`, [sessionUser.id]);
+        const blocksRes = await pool.query(`SELECT blocker_id, blocked_id FROM blocks WHERE blocker_id = $1 OR blocked_id = $1`, [sessionUser.id]);
         
-        const mappedUsers = users.rows.map(u => {
+        const mappedUsers = users.rows.filter(u => {
+          return !blocksRes.rows.some(b => b.blocker_id === u.id || b.blocked_id === u.id);
+        }).map(u => {
           const live = online.get(u.id);
           let fStatus = "none";
           let isIncoming = false;
@@ -843,10 +898,11 @@ async function handleApi(req, res, url) {
             fStatus = fRow.status;
             isIncoming = fRow.user_id_1 === u.id;
           }
+          const showOnline = fStatus === "accepted";
           return {
             id: u.id,
             username: u.username,
-            status: live ? live.status : "offline",
+            status: live && showOnline ? live.status : "offline",
             friendship_status: fStatus,
             is_incoming: isIncoming
           };
@@ -974,7 +1030,13 @@ function send(ws, type, payload = {}) {
 function notifyPresenceChange(changedUserId, status) {
   for (const entry of online.values()) {
     if (entry.ws.subscriptions && entry.ws.subscriptions.has(changedUserId)) {
-      send(entry.ws, "presence-update", { user: { id: changedUserId, status } });
+      // For real-time updates, check DB to see if they are friends
+      pool.query(`SELECT status FROM friends WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)`, [changedUserId, entry.user.id])
+        .then(res => {
+          if (res.rows.length > 0 && res.rows[0].status === "accepted") {
+            send(entry.ws, "presence-update", { user: { id: changedUserId, status } });
+          }
+        }).catch(() => {});
     }
   }
 }
@@ -1080,12 +1142,22 @@ function handleSocketMessage(ws, user, raw) {
 
   if (message.type === "subscribe") {
     ws.subscriptions = new Set(message.ids || []);
-    const users = [];
-    for (const subId of ws.subscriptions) {
-      const entry = online.get(subId);
-      users.push({ id: subId, status: entry ? entry.status : "offline" });
+    if (ws.subscriptions.size > 0) {
+      const subIds = Array.from(ws.subscriptions);
+      pool.query(`SELECT user_id_1, user_id_2 FROM friends WHERE ((user_id_1 = $1 AND user_id_2 = ANY($2::text[])) OR (user_id_1 = ANY($2::text[]) AND user_id_2 = $1)) AND status = 'accepted'`, [user.id, subIds])
+        .then(friendsRes => {
+          const acceptedFriendIds = new Set(friendsRes.rows.map(r => r.user_id_1 === user.id ? r.user_id_2 : r.user_id_1));
+          const users = [];
+          for (const subId of ws.subscriptions) {
+            const entry = online.get(subId);
+            const showOnline = acceptedFriendIds.has(subId);
+            users.push({ id: subId, status: entry && showOnline ? entry.status : "offline" });
+          }
+          send(ws, "presence", { users });
+        }).catch(() => {});
+    } else {
+      send(ws, "presence", { users: [] });
     }
-    send(ws, "presence", { users });
   }
 }
 

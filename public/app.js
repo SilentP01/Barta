@@ -17,6 +17,11 @@ const authNotice = document.querySelector("#authNotice");
 const currentUser = document.querySelector("#currentUser");
 const logoutBtn = document.querySelector("#logoutBtn");
 const profileBtn = document.querySelector("#profileBtn");
+const blocksBtn = document.querySelector("#blocksBtn");
+const blocksPanel = document.querySelector("#blocksPanel");
+const closeBlocksBtn = document.querySelector("#closeBlocksBtn");
+const blocksList = document.querySelector("#blocksList");
+const fetchBlocksBtn = document.querySelector("#fetchBlocksBtn");
 const closeProfileBtn = document.querySelector("#closeProfileBtn");
 const profilePanel = document.querySelector("#profilePanel");
 const profileEmail = document.querySelector("#profileEmail");
@@ -220,6 +225,14 @@ function postJson(url, body) {
   });
 }
 
+function fetchJson(url) {
+  return fetch(url).then(async (response) => {
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Something went wrong.");
+    return data;
+  });
+}
+
 function setFormLoading(form, isLoading, loadingText) {
   const button = form.querySelector('button[type="submit"]');
   for (const element of form.elements) element.disabled = isLoading;
@@ -386,12 +399,16 @@ function renderUsers(onlineUsers = []) {
     for (const user of accepted) {
       const row = document.createElement("div");
       row.className = "user-row";
+      row.style.position = "relative";
       row.innerHTML = `
         <div>
           <strong>@${escapeHtml(user.username)}</strong>
           <div class="status ${user.status}">${user.status}</div>
         </div>
+        <div class="actions" style="display: flex; gap: 4px; align-items: center;"></div>
       `;
+      const actionsDiv = row.querySelector(".actions");
+
       if (user.status === "online") {
         if (!currentPeer) {
           const button = document.createElement("button");
@@ -402,7 +419,7 @@ function renderUsers(onlineUsers = []) {
             if (isMobileDevice && !isNativeBarta) showPrivacyWarningToast();
             sendSocket("request", { to: user.id });
           });
-          row.appendChild(button);
+          actionsDiv.appendChild(button);
         } else {
           row.style.cursor = "pointer";
           row.addEventListener("click", () => {
@@ -418,6 +435,31 @@ function renderUsers(onlineUsers = []) {
           });
         }
       }
+
+      // Add "Remove" and "Block" buttons
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "ghost";
+      removeBtn.style.padding = "4px 8px";
+      removeBtn.style.fontSize = "12px";
+      removeBtn.textContent = "Remove";
+      removeBtn.onclick = (e) => { e.stopPropagation(); removeFriend(user.id); };
+      actionsDiv.appendChild(removeBtn);
+
+      const blockBtn = document.createElement("button");
+      blockBtn.className = "ghost";
+      blockBtn.style.padding = "4px 8px";
+      blockBtn.style.fontSize = "12px";
+      blockBtn.style.color = "var(--error)";
+      blockBtn.textContent = "Block";
+      blockBtn.onclick = async (e) => {
+        e.stopPropagation();
+        if (confirm(`Block @${user.username}? They won't be able to contact you.`)) {
+          await postJson("/api/friends/block", { peer_id: user.id });
+          fetchFriends();
+        }
+      };
+      actionsDiv.appendChild(blockBtn);
+
       userList.appendChild(row);
     }
   }
@@ -505,7 +547,7 @@ function resetPeer(note = "Disconnected") {
   // Hide connection type badge
   if (connTypeIndicator) connTypeIndicator.classList.add("hidden");
   peerView.classList.add("hidden");
-  emptyState.classList.remove("hidden");
+  emptyState.classList.add("hidden");
   addSystemMessage(note);
   showSidebar(); // on mobile, slide back to user list
 }
@@ -1582,19 +1624,6 @@ logoutBtn.addEventListener("click", async () => {
   showLanding();
 });
 
-profileBtn.addEventListener("click", async () => {
-  profilePanel.classList.remove("hidden");
-  setProfileNotice();
-  try {
-    const response = await fetch("/api/profile");
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error);
-    profileEmail.textContent = data.user.email;
-  } catch (error) {
-    setProfileNotice(error.message);
-  }
-});
-
 closeProfileBtn.addEventListener("click", () => profilePanel.classList.add("hidden"));
 
 profileEmailForm.addEventListener("submit", async (event) => {
@@ -2011,3 +2040,72 @@ window.addEventListener("popstate", () => {
   setInterval(checkVersion, 60_000);
   checkVersion();
 })();
+
+ p r o f i l e B t n . a d d E v e n t L i s t e n e r ( ' c l i c k ' ,   a s y n c   ( )   = >   { 
+     p r o f i l e E m a i l . t e x t C o n t e n t   =   m e . e m a i l ; 
+     p r o f i l e E m a i l F o r m . r e s e t ( ) ; 
+     p r o f i l e P a s s w o r d O t p F o r m . c l a s s L i s t . r e m o v e ( ' h i d d e n ' ) ; 
+     s e t P r o f i l e N o t i c e ( ) ; 
+     p r o f i l e P a n e l . c l a s s L i s t . r e m o v e ( ' h i d d e n ' ) ; 
+     i f ( b l o c k s P a n e l )   b l o c k s P a n e l . c l a s s L i s t . a d d ( ' h i d d e n ' ) ; 
+ } ) ; 
+ 
+ i f ( b l o c k s B t n )   { 
+     b l o c k s B t n . a d d E v e n t L i s t e n e r ( ' c l i c k ' ,   ( )   = >   { 
+         p r o f i l e P a n e l . c l a s s L i s t . a d d ( ' h i d d e n ' ) ; 
+         b l o c k s P a n e l . c l a s s L i s t . r e m o v e ( ' h i d d e n ' ) ; 
+         f e t c h B l o c k s ( ) ; 
+     } ) ; 
+ } 
+ 
+ i f ( c l o s e B l o c k s B t n )   { 
+     c l o s e B l o c k s B t n . a d d E v e n t L i s t e n e r ( ' c l i c k ' ,   ( )   = >   { 
+         b l o c k s P a n e l . c l a s s L i s t . a d d ( ' h i d d e n ' ) ; 
+     } ) ; 
+ } 
+ 
+ i f ( f e t c h B l o c k s B t n )   { 
+     f e t c h B l o c k s B t n . a d d E v e n t L i s t e n e r ( ' c l i c k ' ,   f e t c h B l o c k s ) ; 
+ } 
+ 
+ a s y n c   f u n c t i o n   f e t c h B l o c k s ( )   { 
+     t r y   { 
+         c o n s t   r e s   =   a w a i t   f e t c h J s o n ( ' / a p i / b l o c k s ' ) ; 
+         b l o c k s L i s t . i n n e r H T M L   =   ' ' ; 
+         i f   ( ! r e s . b l o c k s   | |   r e s . b l o c k s . l e n g t h   = = =   0 )   { 
+             b l o c k s L i s t . i n n e r H T M L   =   ' < p   c l a s s = \  
+ m u t e d \ > N o   b l o c k e d   u s e r s . < / p > ' ; 
+             r e t u r n ; 
+         } 
+         f o r   ( c o n s t   b   o f   r e s . b l o c k s )   { 
+             c o n s t   r o w   =   d o c u m e n t . c r e a t e E l e m e n t ( ' d i v ' ) ; 
+             r o w . s t y l e . d i s p l a y   =   ' f l e x ' ; 
+             r o w . s t y l e . j u s t i f y C o n t e n t   =   ' s p a c e - b e t w e e n ' ; 
+             r o w . s t y l e . a l i g n I t e m s   =   ' c e n t e r ' ; 
+             r o w . s t y l e . b a c k g r o u n d   =   ' v a r ( - - s u r f a c e ) ' ; 
+             r o w . s t y l e . p a d d i n g   =   ' 8 p x   1 2 p x ' ; 
+             r o w . s t y l e . b o r d e r R a d i u s   =   ' 8 p x ' ; 
+             
+             c o n s t   n a m e   =   d o c u m e n t . c r e a t e E l e m e n t ( ' s t r o n g ' ) ; 
+             n a m e . t e x t C o n t e n t   =   ' @ '   +   b . u s e r n a m e ; 
+             r o w . a p p e n d C h i l d ( n a m e ) ; 
+             
+             c o n s t   u n b l o c k B t n   =   d o c u m e n t . c r e a t e E l e m e n t ( ' b u t t o n ' ) ; 
+             u n b l o c k B t n . c l a s s N a m e   =   ' g h o s t ' ; 
+             u n b l o c k B t n . s t y l e . p a d d i n g   =   ' 4 p x   8 p x ' ; 
+             u n b l o c k B t n . t e x t C o n t e n t   =   ' U n b l o c k ' ; 
+             u n b l o c k B t n . o n c l i c k   =   a s y n c   ( )   = >   { 
+                 a w a i t   p o s t J s o n ( ' / a p i / f r i e n d s / u n b l o c k ' ,   {   p e e r _ i d :   b . i d   } ) ; 
+                 f e t c h B l o c k s ( ) ; 
+                 f e t c h F r i e n d s ( ) ;   / /   R e f r e s h   t o   m a k e   t h e m   s e a r c h a b l e   a g a i n 
+             } ; 
+             r o w . a p p e n d C h i l d ( u n b l o c k B t n ) ; 
+             
+             b l o c k s L i s t . a p p e n d C h i l d ( r o w ) ; 
+         } 
+     }   c a t c h   ( e r r )   { 
+         b l o c k s L i s t . i n n e r H T M L   =   ' < p   c l a s s = \ n o t i c e \ > '   +   e s c a p e H t m l ( e r r . m e s s a g e )   +   ' < / p > ' ; 
+     } 
+ } 
+  
+ 

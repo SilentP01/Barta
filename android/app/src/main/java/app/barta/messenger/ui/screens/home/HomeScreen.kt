@@ -196,7 +196,9 @@ fun HomeScreen(
                                     val state = connState as ConnectionState.Connected
                                     onNavigateToChat(user, state.initiator)
                                 }
-                            }
+                            },
+                            onRemove = { viewModel.removeFriend(user.id) },
+                            onBlock = { viewModel.blockUser(user.id) }
                         )
                     }
                 }
@@ -206,7 +208,16 @@ fun HomeScreen(
 }
 
 @Composable
-fun UserRow(user: OnlineUser, isBusy: Boolean, isCurrentPeer: Boolean = false, onTap: () -> Unit) {
+fun UserRow(
+    user: OnlineUser, 
+    isBusy: Boolean, 
+    isCurrentPeer: Boolean = false, 
+    onTap: () -> Unit,
+    onRemove: (() -> Unit)? = null,
+    onBlock: (() -> Unit)? = null
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -248,6 +259,27 @@ fun UserRow(user: OnlineUser, isBusy: Boolean, isCurrentPeer: Boolean = false, o
                 ) {
                     Text(if (isCurrentPeer) "Return" else "Connect", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         color = Teal500, style = MaterialTheme.typography.labelLarge)
+                }
+            }
+            
+            if (onRemove != null && onBlock != null) {
+                Box {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Remove Friend") },
+                            onClick = { menuExpanded = false; onRemove() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Block User", color = MaterialTheme.colorScheme.error) },
+                            onClick = { menuExpanded = false; onBlock() }
+                        )
+                    }
                 }
             }
         }
