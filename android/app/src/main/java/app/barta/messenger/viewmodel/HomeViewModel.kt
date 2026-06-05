@@ -1,7 +1,9 @@
 package app.barta.messenger.viewmodel
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
+import app.barta.messenger.util.NetworkMonitor
 import androidx.lifecycle.viewModelScope
 import app.barta.messenger.data.local.SecurePrefs
 import app.barta.messenger.data.model.ConnectionState
@@ -13,6 +15,7 @@ import app.barta.messenger.data.network.socketClient
 import app.barta.messenger.util.NotificationHelper
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.launchIn
@@ -39,8 +42,19 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     val myId       = SecurePrefs.getUserId(app)
     val myUsername = SecurePrefs.getUsername(app)
 
+    val isOnline: Flow<Boolean> = NetworkMonitor.observe(app)
+
     init {
         fetchFriends()
+        // Auto-reconnect when network comes back
+        viewModelScope.launch {
+            NetworkMonitor.observe(app).collect { online ->
+                if (online) {
+                    socketClient.connect()
+                    fetchFriends()
+                }
+            }
+        }
 
         // Observe connection status
         socketClient.connected.onEach { connected ->

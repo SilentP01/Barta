@@ -1451,7 +1451,15 @@ function receiveData(data) {
       addSystemMessage("Call ended");
       _cleanupCallUI();
     }
-    if (packet.kind === "file-start") incomingFiles.set(packet.id, { meta: packet, chunks: [] });
+    if (packet.kind === "file-start") {
+      const ext = (packet.name || "").split(".").pop().toLowerCase();
+      const blockedExts = ["exe", "bat", "cmd", "sh", "msi", "vbs", "js", "scr", "pif"];
+      if (blockedExts.includes(ext) || packet.size > 100 * 1024 * 1024) { // 100MB limit
+        addSystemMessage("Blocked malicious or excessively large file: " + packet.name);
+        return;
+      }
+      incomingFiles.set(packet.id, { meta: packet, chunks: [], received: 0 });
+    }
     if (packet.kind === "file-end") {
       const file = incomingFiles.get(packet.id);
       if (!file) return;

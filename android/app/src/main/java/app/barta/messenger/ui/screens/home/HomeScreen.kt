@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.barta.messenger.util.NetworkMonitor
 import app.barta.messenger.data.model.ConnectionState
 import app.barta.messenger.data.model.OnlineUser
 import app.barta.messenger.ui.components.AvatarView
@@ -54,6 +55,8 @@ fun HomeScreen(
     val query      by viewModel.searchQuery.collectAsStateWithLifecycle()
     val filtered   = remember(contacts, query) { viewModel.filteredContacts() }
     var showSearchDialog by remember { mutableStateOf(false) }
+    val isOnline by NetworkMonitor.observe(androidx.compose.ui.platform.LocalContext.current)
+        .collectAsState(initial = true)
 
     // Incoming request dialog
     if (connState is ConnectionState.PeerRequesting) {
@@ -120,8 +123,22 @@ fun HomeScreen(
 
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
 
+            // No internet banner
+            AnimatedVisibility(!isOnline) {
+                Surface(color = MaterialTheme.colorScheme.errorContainer) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Outlined.WifiOff, null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("No internet connection", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+                    }
+                }
+            }
             // Connection status bar
-            AnimatedVisibility(!socketReady) {
+            AnimatedVisibility(isOnline && !socketReady) {
                 Surface(color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f)) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),

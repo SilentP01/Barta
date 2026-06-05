@@ -6,6 +6,25 @@ const path = require("path");
 const { Pool } = require("pg");
 const admin = require("firebase-admin");
 
+// ─── Structured logger ─────────────────────────────────────────────────────
+function log(level, msg, data = {}) {
+  const entry = { ts: new Date().toISOString(), level, msg, ...data };
+  if (level === "error") console.error(JSON.stringify(entry));
+  else console.log(JSON.stringify(entry));
+}
+
+async function alertWebhook(msg, data = {}) {
+  const url = process.env.ALERT_WEBHOOK_URL;
+  if (!url) return;
+  const text = `🚨 *Barta Alert* — ${msg}\n\`\`\`${JSON.stringify(data, null, 2)}\`\`\``;
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+    signal: AbortSignal.timeout(5000)
+  }).catch(() => {});
+}
+
 // Initialize Firebase Admin SDK for FCM V1
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
@@ -18,36 +37,41 @@ try {
     admin.initializeApp();
   }
 } catch (e) {
-  console.log("Firebase Admin not initialized: ", e.message);
+  log("warn", "Firebase Admin not initialized", { reason: e.message });
 }
 
-
-
-
 process.on("uncaughtException", (err) => {
-  console.error("Uncaught Exception:", err);
+  log("error", "Uncaught Exception", { message: err.message, stack: err.stack });
+  alertWebhook("Uncaught Exception", { message: err.message });
 });
 
 process.on("unhandledRejection", (err) => {
-  console.error("Unhandled Rejection:", err);
+  log("error", "Unhandled Rejection", { message: String(err) });
+  alertWebhook("Unhandled Rejection", { message: String(err) });
 });
+
 
 
 const HOST = process.env.HOST || "0.0.0.0";
 const PUBLIC_DIR = path.join(__dirname, "public");
 const SESSION_COOKIE = "p2p_session";
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes (sliding window)
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX = 10;
+const WS_RATE_WINDOW_MS = 10 * 1000;   // WebSocket: 30 msgs per 10 sec per user
+const WS_RATE_MAX = 30;
 const MAGIC_LINK_TTL_MS = 10 * 60 * 1000;
 const MAX_ONLINE_USERS = Number(process.env.MAX_ONLINE_USERS || 250);
 const ADMIN_SECRET = process.env.ADMIN_SECRET || "";
 const SERVER_RUN_ID = crypto.randomBytes(8).toString("hex");
-const LATEST_APP_VERSION_CODE = 2;
+const LATEST_APP_VERSION_CODE = 4;
+const IS_PRODUCTION = process.env.NODE_ENV === "production" || !!process.env.RAILWAY_PUBLIC_DOMAIN;
 
 const online = new Map();
 const pendingRequests = new Map();
 const rateLimits = new Map();
+const wsRateLimits = new Map(); // per-user WebSocket rate limits
+
 
 
 const pool = new Pool({
@@ -59,8 +83,28 @@ const pool = new Pool({
 });
 
 pool.on("error", (err) => {
-  console.error("🔥 Unexpected PG error:", err);
+  log("error", "Unexpected PG pool error", { message: err.message });
+  alertWebhook("PostgreSQL pool error", { message: err.message });
 });
+
+// ─── WebSocket per-user rate limiter ────────────────────────────────────────
+function wsRateLimit(userId) {
+  const now = Date.now();
+  const rec = wsRateLimits.get(userId);
+  if (!rec || rec.resetAt <= now) {
+    wsRateLimits.set(userId, { count: 1, resetAt: now + WS_RATE_WINDOW_MS });
+    return false;
+  }
+  rec.count++;
+  return rec.count > WS_RATE_MAX;
+}
+
+// ─── Input validation helpers ────────────────────────────────────────────────
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isValidUUID(v) { return typeof v === "string" && UUID_RE.test(v); }
+function isValidUsername(v) { return typeof v === "string" && /^[a-z0-9_]{3,24}$/.test(v); }
+function isValidEmail(v) { return typeof v === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -332,8 +376,12 @@ async function getSessionUser(req) {
     await run("DELETE FROM sessions WHERE token_hash = $1", [tokenHash]);
     return null;
   }
+  // Sliding window: extend session on each active request
+  const newExpiry = Date.now() + SESSION_TTL_MS;
+  await run("UPDATE sessions SET expires_at = $1 WHERE token_hash = $2", [newExpiry, tokenHash]);
   return findUserById(row.user_id);
 }
+
 
 async function clearSession(req, res) {
   const token = parseCookies(req)[SESSION_COOKIE];
@@ -409,6 +457,8 @@ async function createAndSendMagicLink({ req, userId = null, email, purpose, subj
   const fromName = process.env.EMAIL_FROM_NAME || "no-reply.Barta";
   if (!apiKey || !fromEmail) throw new Error("Email service is not configured.");
 
+  const FETCH_TIMEOUT = 10_000; // 10 second timeout for email API
+
   if (provider === "sendgrid") {
     const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
       method: "POST",
@@ -418,9 +468,14 @@ async function createAndSendMagicLink({ req, userId = null, email, purpose, subj
         from: { email: fromEmail, name: fromName },
         subject,
         content: [{ type: "text/plain", value: textContent }, { type: "text/html", value: htmlContent }]
-      })
+      }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT)
     });
-    if (!response.ok) throw new Error("Email API failed.");
+    if (!response.ok) {
+      const errText = await response.text().catch(() => "");
+      log("error", "SendGrid email failed", { status: response.status, body: errText });
+      throw new Error("Email API failed.");
+    }
     return;
   }
 
@@ -433,10 +488,16 @@ async function createAndSendMagicLink({ req, userId = null, email, purpose, subj
       subject,
       textContent,
       htmlContent
-    })
+    }),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT)
   });
-  if (!response.ok) throw new Error("Email API failed.");
+  if (!response.ok) {
+    const errText = await response.text().catch(() => "");
+    log("error", "Brevo email failed", { status: response.status, body: errText });
+    throw new Error("Email API failed.");
+  }
 }
+
 
 function emailServiceReady() {
   return Boolean(process.env.EMAIL_API_KEY && process.env.EMAIL_FROM);
@@ -481,8 +542,33 @@ function readBody(req) {
 
 async function handleApi(req, res, url) {
   try {
+    // ── HTTPS redirect (behind reverse proxy) ────────────────────────────────
+    const proto = req.headers["x-forwarded-proto"];
+    if (IS_PRODUCTION && proto && proto !== "https") {
+      const host = req.headers["x-forwarded-host"] || req.headers.host || "";
+      res.writeHead(301, { Location: `https://${host}${req.url}` });
+      return res.end();
+    }
+
+    // ── Health check ─────────────────────────────────────────────────────────
     if (req.method === "GET" && url.pathname === "/api/health") {
-      return sendJson(res, 200, { ok: true, app: "Barta" });
+      try {
+        await pool.query("SELECT 1");
+        return sendJson(res, 200, { ok: true, db: "ok", uptime: Math.floor(process.uptime()), run: SERVER_RUN_ID });
+      } catch (dbErr) {
+        log("error", "Health check DB failure", { message: dbErr.message });
+        return sendJson(res, 503, { ok: false, db: "error" });
+      }
+    }
+
+    // ── Asset links for Android App Links verification ────────────────────────
+    if (req.method === "GET" && url.pathname === "/.well-known/assetlinks.json") {
+      const appId = process.env.ANDROID_APP_ID || "app.barta.messenger";
+      const fingerprint = process.env.ANDROID_SHA256_FINGERPRINT || "";
+      return sendJson(res, 200, [{
+        relation: ["delegate_permission/common.handle_all_urls"],
+        target: { namespace: "android_app", package_name: appId, sha256_cert_fingerprints: [fingerprint] }
+      }]);
     }
 
     if (req.method === "GET" && url.pathname === "/api/version") {
@@ -760,7 +846,7 @@ async function handleApi(req, res, url) {
       if (!user) return sendError(res, 401, "Unauthorized");
       const body = await readBody(req);
       const toUserId = body.to_user_id;
-      if (!toUserId || toUserId === user.id) return sendError(res, 400, "Invalid user");
+      if (!isValidUUID(toUserId) || toUserId === user.id) return sendError(res, 400, "Invalid user");
       const targetUser = await findUserById(toUserId);
       if (!targetUser) return sendError(res, 404, "User not found");
 
@@ -783,6 +869,7 @@ async function handleApi(req, res, url) {
       if (!user) return sendError(res, 401, "Unauthorized");
       const body = await readBody(req);
       const fromUserId = body.from_user_id;
+      if (!isValidUUID(fromUserId)) return sendError(res, 400, "Invalid user");
       
       const reqRow = await one("SELECT * FROM friends WHERE user_id_1 = $1 AND user_id_2 = $2 AND status = 'pending'", [fromUserId, user.id]);
       if (!reqRow) return sendError(res, 404, "Friend request not found.");
@@ -800,6 +887,7 @@ async function handleApi(req, res, url) {
       if (!user) return sendError(res, 401, "Unauthorized");
       const body = await readBody(req);
       const peerId = body.peer_id;
+      if (!isValidUUID(peerId)) return sendError(res, 400, "Invalid user");
       
       await run("DELETE FROM friends WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)", [user.id, peerId]);
 
@@ -814,6 +902,7 @@ async function handleApi(req, res, url) {
       if (!user) return sendError(res, 401, "Unauthorized");
       const body = await readBody(req);
       const peerId = body.peer_id;
+      if (!isValidUUID(peerId)) return sendError(res, 400, "Invalid user");
       
       await run("DELETE FROM friends WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)", [user.id, peerId]);
       await run("INSERT INTO blocks (blocker_id, blocked_id, created_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", [user.id, peerId, Date.now()]);
@@ -829,6 +918,7 @@ async function handleApi(req, res, url) {
       if (!user) return sendError(res, 401, "Unauthorized");
       const body = await readBody(req);
       const peerId = body.peer_id;
+      if (!isValidUUID(peerId)) return sendError(res, 400, "Invalid user");
       
       await run("DELETE FROM blocks WHERE blocker_id = $1 AND blocked_id = $2", [user.id, peerId]);
 
@@ -994,6 +1084,21 @@ async function handleApi(req, res, url) {
 }
 
 async function serveStatic(req, res, url) {
+  // HTTPS redirect for static pages too
+  const proto = req.headers["x-forwarded-proto"];
+  if (IS_PRODUCTION && proto && proto !== "https") {
+    const host = req.headers["x-forwarded-host"] || req.headers.host || "";
+    res.writeHead(301, { Location: `https://${host}${req.url}` });
+    return res.end();
+  }
+
+  // Serve privacy policy page
+  if (url.pathname === "/privacy") {
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Privacy Policy - Barta</title><style>body{font-family:sans-serif;max-width:760px;margin:2rem auto;padding:0 1rem;line-height:1.7;color:#222}h1{color:#1a1a2e}</style></head><body><h1>Privacy Policy</h1><p><strong>Effective Date:</strong> June 2025</p><p>Barta ("we", "our", "the app") is a private, account-based, peer-to-peer communication application. We are committed to protecting your privacy.</p><h2>Data We Collect</h2><ul><li><strong>Account info:</strong> email address, username, and hashed password — required to create and secure your account.</li><li><strong>Session tokens:</strong> stored as secure, HttpOnly cookies; expire after 30 minutes of inactivity.</li><li><strong>Message metadata:</strong> we do <em>not</em> store the content of your messages. All real-time communication is peer-to-peer (WebRTC).</li><li><strong>FCM tokens:</strong> used only to deliver incoming call notifications to your device.</li></ul><h2>Data We Do Not Collect</h2><p>We do not collect or sell your messages, media files, contact lists, or location data.</p><h2>Data Retention</h2><p>Your data is retained as long as your account is active. You may delete your account at any time from the app settings, which permanently erases all associated data.</p><h2>Third Parties</h2><p>We use <strong>Firebase Cloud Messaging</strong> (Google) for push notifications, and an email provider (Brevo or SendGrid) for sending verification links. No other third parties receive your data.</p><h2>Contact</h2><p>Questions? Email us at privacy@barta.app</p></body></html>`;
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+    return res.end(html);
+  }
+
   let requested = decodeURIComponent(url.pathname);
   if (requested === "/" || requested === "/home" || requested === "/check-in") {
     requested = "/index.html";
@@ -1005,9 +1110,16 @@ async function serveStatic(req, res, url) {
     return;
   }
 
+  // Cache-Control: long for immutable assets, no-cache for HTML
+  const ext = path.extname(filePath);
+  const cacheHeader = ext === ".html" ? "no-cache" : "public, max-age=86400";
+
   try {
     const data = await fs.readFile(filePath);
-    res.writeHead(200, { "Content-Type": mimeTypes[path.extname(filePath)] || "application/octet-stream" });
+    res.writeHead(200, {
+      "Content-Type": mimeTypes[ext] || "application/octet-stream",
+      "Cache-Control": cacheHeader
+    });
     res.end(data);
   } catch {
     res.writeHead(404);
@@ -1015,14 +1127,16 @@ async function serveStatic(req, res, url) {
   }
 }
 
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-  if (url.pathname.startsWith("/api/")) {
+  if (url.pathname.startsWith("/api/") || url.pathname === "/.well-known/assetlinks.json") {
     handleApi(req, res, url);
     return;
   }
   serveStatic(req, res, url);
 });
+
 
 function send(ws, type, payload = {}) {
   wsSend(ws, JSON.stringify({ type, ...payload }));
@@ -1068,6 +1182,12 @@ function clearRequestsFor(userId) {
 }
 
 function handleSocketMessage(ws, user, raw) {
+  if (wsRateLimit(user.id)) {
+    send(ws, "error-message", { error: "Too many messages. Disconnected for rate limiting." });
+    ws.destroy();
+    return;
+  }
+
   let message;
   try {
     message = JSON.parse(raw);
@@ -1325,25 +1445,26 @@ if (!process.env.DATABASE_URL || process.env.DATABASE_URL.trim() === "") {
 
 async function startApplication() {
   try {
-    console.log("🚀 Booting app...");
+    log("info", "Booting Barta server...", { run: SERVER_RUN_ID, production: IS_PRODUCTION });
 
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL is missing in environment variables");
     }
 
     await initDatabase();
-    console.log("✅ Database connected successfully");
+    log("info", "Database connected and schema ready");
 
     const port = process.env.PORT || 3000;
 
     server.listen(port, "0.0.0.0", () => {
-      console.log(`🚀 Server running at http://0.0.0.0:${port}`);
+      log("info", `Server listening`, { port, url: `http://0.0.0.0:${port}` });
     });
 
   } catch (err) {
-    console.error("❌ Startup failed:", err);
+    log("error", "Startup failed", { message: err.message, stack: err.stack });
+    await alertWebhook("Server startup FAILED", { message: err.message });
     process.exit(1);
   }
 }
 
-startApplication();
+startApplication();
