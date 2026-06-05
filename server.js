@@ -888,6 +888,7 @@ async function handleApi(req, res, url) {
         const blocksRes = await pool.query(`SELECT blocker_id, blocked_id FROM blocks WHERE blocker_id = $1 OR blocked_id = $1`, [sessionUser.id]);
         
         const mappedUsers = users.rows.filter(u => {
+          if (u.id === sessionUser.id) return false; // exclude self
           return !blocksRes.rows.some(b => b.blocker_id === u.id || b.blocked_id === u.id);
         }).map(u => {
           const live = online.get(u.id);
@@ -1130,14 +1131,22 @@ function handleSocketMessage(ws, user, raw) {
   }
 
   if (message.type === "refresh-presence") {
-    const users = [];
-    if (ws.subscriptions) {
-      for (const subId of ws.subscriptions) {
-        const entry = online.get(subId);
-        users.push({ id: subId, status: entry ? entry.status : "offline" });
-      }
+    if (ws.subscriptions && ws.subscriptions.size > 0) {
+      const subIds = Array.from(ws.subscriptions);
+      pool.query(`SELECT user_id_1, user_id_2 FROM friends WHERE ((user_id_1 = $1 AND user_id_2 = ANY($2::text[])) OR (user_id_1 = ANY($2::text[]) AND user_id_2 = $1)) AND status = 'accepted'`, [user.id, subIds])
+        .then(friendsRes => {
+          const acceptedFriendIds = new Set(friendsRes.rows.map(r => r.user_id_1 === user.id ? r.user_id_2 : r.user_id_1));
+          const users = [];
+          for (const subId of ws.subscriptions) {
+            const entry = online.get(subId);
+            const showOnline = acceptedFriendIds.has(subId);
+            users.push({ id: subId, status: entry && showOnline ? entry.status : "offline" });
+          }
+          send(ws, "presence", { users });
+        }).catch(() => {});
+    } else {
+      send(ws, "presence", { users: [] });
     }
-    send(ws, "presence", { users });
   }
 
   if (message.type === "subscribe") {

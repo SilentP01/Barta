@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.WifiOff
@@ -51,7 +52,7 @@ fun HomeScreen(
     val connState  by viewModel.connState.collectAsStateWithLifecycle()
     val socketReady by viewModel.socketReady.collectAsStateWithLifecycle()
     val query      by viewModel.searchQuery.collectAsStateWithLifecycle()
-    val filtered   = viewModel.filteredContacts()
+    val filtered   = remember(contacts, query) { viewModel.filteredContacts() }
     var showSearchDialog by remember { mutableStateOf(false) }
 
     // Incoming request dialog
